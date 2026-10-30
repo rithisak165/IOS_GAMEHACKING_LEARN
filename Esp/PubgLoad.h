@@ -1,16 +1,11 @@
-//
-//  PubgLoad.h
-//  pubg
-//
-//  Created by 李良林 on 2021/2/14.
-//
-
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface PubgLoad : NSObject
 + (void)load;
++ (nullable UIWindow *)findKeyWindow;
 @end
 
 NS_ASSUME_NONNULL_END
