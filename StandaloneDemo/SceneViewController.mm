@@ -886,8 +886,8 @@ static void EndCard()
         ImGui::Spacing();
 
         // Vertical Navigation Tabs
-        const char *tabs[] = { "Aimbot", "ESP", "Misc", "Settings" };
-        const char *icons[] = { "(+)", "[#]", "{*}", "[=]" };
+        const char *tabs[] = { "ESP", "AIM", "MISC", "SETTING" };
+        const char *icons[] = { "[#]", "(+)", "{*}", "[=]" };
 
         for (int i = 0; i < 4; i++) {
             bool isActive = (g_State.currentTab == i);
@@ -928,70 +928,87 @@ static void EndCard()
         ImGui::SameLine();
         ImGui::BeginGroup();
 
-        // Top Horizontal Sub-Tabs Bar
-        ImGui::Spacing();
-        if (g_State.currentTab == 0) {
-            bool sub1 = (g_State.currentSubTab == 0);
-            if (sub1) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.70f, 0.28f, 1.0f));
-            else      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.65f, 1.0f));
-            if (ImGui::Button("Aimbot (!)", ImVec2(120, 28))) g_State.currentSubTab = 0;
-            ImGui::PopStyleColor();
-
-            ImGui::SameLine();
-            bool sub2 = (g_State.currentSubTab == 1);
-            if (sub2) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.70f, 0.28f, 1.0f));
-            else      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.65f, 1.0f));
-            if (ImGui::Button("Silent Aim (!)", ImVec2(130, 28))) g_State.currentSubTab = 1;
-            ImGui::PopStyleColor();
-        } else if (g_State.currentTab == 1) {
-            ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Visuals & ESP Overlay");
-        } else if (g_State.currentTab == 2) {
-            ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Diagnostics & Telemetry");
-        } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Settings & Preferences");
-        }
-
-        ImGui::Separator();
-        ImGui::Spacing();
-
         // Two-Column Content Area (Matching Reference Layout)
         float contentW = ImGui::GetContentRegionAvail().x;
         float colW = (contentW - 12.0f) * 0.5f;
 
         // ---------------------------------------------------------------------------------
-        // TAB 0: AIMBOT / SILENT AIM (Two-Column Layout)
+        // TAB 0: ESP (Modern Card Layout)
         // ---------------------------------------------------------------------------------
         if (g_State.currentTab == 0) {
-            // Left Column: Toggles
-            ImGui::BeginChild("AimLeftCol", ImVec2(colW, 0.0f), false);
-            
-            BeginCard("Aimbot", 165.0f);
-            ToggleSwitch("Enable Aim", &g_State.bEnableAim);
+            // Left Card: Box
+            ImGui::BeginChild("ESPLeftCol", ImVec2(colW, 0.0f), false);
+            BeginCard("BOX", 0.0f);
+            ToggleSwitch("Box", &g_State.bBox);
+            if (g_State.bBox) {
+                ImGui::Spacing();
+                static int boxStyle = 0;
+                const char *styles[] = { "Square", "Corner" };
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##DemoBoxStyle", &boxStyle, styles, 2);
+                ImGui::Spacing();
+                TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
+                ImGui::Spacing();
+                TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
+            }
+            EndCard();
+            ImGui::EndChild();
+
+            ImGui::SameLine();
+
+            // Right Card: Elements & Diagnostics
+            ImGui::BeginChild("ESPRightCol", ImVec2(colW, 0.0f), false);
+            BeginCard("ELEMENTS", 0.0f);
+            ToggleSwitch("Snapline", &g_State.bSnaplines);
             ImGui::Spacing();
-            ToggleSwitch("Visible Only", &g_State.bVisibleOnly);
+            ToggleSwitch("Skeleton", &g_State.bSkeleton);
+            ImGui::Spacing();
+            ToggleSwitch("Distance", &g_State.bDistance);
+            ImGui::Spacing();
+            ToggleSwitch("Health", &g_State.bHealth);
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+            ImGui::Text("Active Targets: %zu Dummies", _dummies.size());
+            ImGui::Text("Skeleton: 15 Articulated Joints");
+            ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
+            EndCard();
+            ImGui::EndChild();
+        }
+
+        // ---------------------------------------------------------------------------------
+        // TAB 1: AIM (Unified Two-Column Card Layout - No Top Sub-Tabs)
+        // ---------------------------------------------------------------------------------
+        else if (g_State.currentTab == 1) {
+            // Left Column: Aimbot
+            ImGui::BeginChild("AimLeftCol", ImVec2(colW, 0.0f), false);
+            BeginCard("AIMBOT", 0.0f);
+            ToggleSwitch("Enable", &g_State.bEnableAim);
+            ImGui::Spacing();
+            ToggleSwitch("Visible Check", &g_State.bVisibleOnly);
             ImGui::Spacing();
             ToggleSwitch("Ignore Team", &g_State.bIgnoreTeam);
             ImGui::Spacing();
-            ToggleSwitch("Sticky", &g_State.bSticky);
-            EndCard();
-
+            ToggleSwitch("Sticky Lock", &g_State.bSticky);
             ImGui::Spacing();
-            BeginCard("Behavior", 0.0f);
-            ToggleSwitch("Auto Shoot", &g_State.bAutoShoot);
+            ToggleSwitch("Draw FOV", &g_State.bLockLine);
             ImGui::Spacing();
-            ToggleSwitch("Draw FOV Circle", &g_State.bLockLine);
-            EndCard();
-
-            ImGui::EndChild();
-
-            // Right Column: Sliders & Tuning
-            ImGui::SameLine();
-            ImGui::BeginChild("AimRightCol", ImVec2(colW, 0.0f), false);
-
-            BeginCard("Tuning", 0.0f);
             TuningSlider("FOV", &g_State.fovRadius, 10.0f, 300.0f, "%.0f");
             ImGui::Spacing();
             TuningSlider("Smoothness", &g_State.smoothness, 1.0f, 30.0f, "%.1f");
+            EndCard();
+            ImGui::EndChild();
+
+            ImGui::SameLine();
+
+            // Right Column: Silent Aim
+            ImGui::BeginChild("AimRightCol", ImVec2(colW, 0.0f), false);
+            BeginCard("SILENT AIM", 0.0f);
+            ToggleSwitch("Enable##silent", &g_State.bAutoShoot);
+            ImGui::Spacing();
+            ToggleSwitch("Auto Fire", &g_State.bAutoShoot);
+            ImGui::Spacing();
+            TuningSlider("Silent FOV", &g_State.fovRadius, 5.0f, 90.0f, "%.0f");
             ImGui::Spacing();
             TuningSlider("Max Turn", &g_State.maxTurn, 0.0f, 180.0f, "%.1f");
             ImGui::Spacing();
@@ -999,54 +1016,16 @@ static void EndCard()
             ImGui::Spacing();
             TuningSlider("Jitter", &g_State.jitter, 0.0f, 0.5f, "%.2f");
             EndCard();
-
             ImGui::EndChild();
         }
 
         // ---------------------------------------------------------------------------------
-        // TAB 1: ESP OVERLAYS (Two-Column Layout)
-        // ---------------------------------------------------------------------------------
-        else if (g_State.currentTab == 1) {
-            ImGui::BeginChild("ESPLeftCol", ImVec2(colW, 0.0f), false);
-
-            BeginCard("Visuals", 0.0f);
-            ToggleSwitch("Master ESP", &g_State.bEnableESP);
-            ImGui::Spacing();
-            ToggleSwitch("15-Joint Skeleton", &g_State.bSkeleton);
-            ImGui::Spacing();
-            ToggleSwitch("2D Bounding Box", &g_State.bBox);
-            ImGui::Spacing();
-            ToggleSwitch("Snaplines", &g_State.bSnaplines);
-            ImGui::Spacing();
-            ToggleSwitch("Distance Tags", &g_State.bDistance);
-            ImGui::Spacing();
-            ToggleSwitch("Health Bars", &g_State.bHealth);
-            EndCard();
-
-            ImGui::EndChild();
-
-            ImGui::SameLine();
-            ImGui::BeginChild("ESPRightCol", ImVec2(colW, 0.0f), false);
-
-            BeginCard("Calibration", 0.0f);
-            TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
-            ImGui::Spacing();
-            TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
-            ImGui::Spacing();
-            ImGui::Text("Active Target Count: %zu", _dummies.size());
-            ImGui::Text("Skeleton Joints: 15 Bones Active");
-            EndCard();
-
-            ImGui::EndChild();
-        }
-
-        // ---------------------------------------------------------------------------------
-        // TAB 2: MISC & TELEMETRY
+        // TAB 2: MISC
         // ---------------------------------------------------------------------------------
         else if (g_State.currentTab == 2) {
             ImGui::BeginChild("MiscCol", ImVec2(0.0f, 0.0f), false);
 
-            BeginCard("Scene Targets & Coordinates", 0.0f);
+            BeginCard("TELEMETRY & TARGETS", 0.0f);
             for (size_t i = 0; i < _dummies.size(); i++) {
                 const auto &d = _dummies[i];
                 SCNVector3 pos = [d.rootNode.presentationNode convertPosition:SCNVector3Zero toNode:nil];
@@ -1062,26 +1041,34 @@ static void EndCard()
         }
 
         // ---------------------------------------------------------------------------------
-        // TAB 3: SETTINGS
+        // TAB 3: SETTING (Colors, Thinness, Snapline Origin)
         // ---------------------------------------------------------------------------------
         else if (g_State.currentTab == 3) {
-            ImGui::BeginChild("SettingsCol", ImVec2(0.0f, 0.0f), false);
-
-            BeginCard("OXSAK Mobile Preferences", 0.0f);
-            ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[ AUTHORIZED DEVELOPMENT SIMULATOR ]");
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.7f, 1.0f), "Running standalone telemetry. Polyfield binary is untouched.");
+            ImGui::BeginChild("SetLeftCol", ImVec2(colW, 0.0f), false);
+            BeginCard("COLORS & OUTLINES", 0.0f);
+            ImGui::ColorEdit4("Box##democol", (float*)&g_State.colBox, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
             ImGui::Spacing();
-            ImGui::BulletText("Tap 0xSAK Floating Badge to toggle menu");
-            ImGui::BulletText("Drag 0xSAK Badge to relocate anywhere");
-            ImGui::BulletText("Double-tap with 2 fingers anywhere to toggle");
-            ImGui::BulletText("Swipe 1 finger to orbit 3D simulation camera");
-            ImGui::BulletText("Pinch 2 fingers to zoom camera in and out");
+            ImGui::ColorEdit4("Snapline##democol", (float*)&g_State.colSnapline, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
             ImGui::Spacing();
-            if (ImGui::Button("Reset Badge Position", ImVec2(180, 32))) {
-                _floatingButton.center = CGPointMake(self.view.bounds.size.width - 45.0, 75.0);
-            }
+            ImGui::ColorEdit4("Skeleton##democol", (float*)&g_State.colSkeleton, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
             EndCard();
+            ImGui::EndChild();
 
+            ImGui::SameLine();
+
+            ImGui::BeginChild("SetRightCol", ImVec2(colW, 0.0f), false);
+            BeginCard("DISPLAY & PREFERENCES", 0.0f);
+            ImGui::TextUnformatted("Snapline Origin");
+            static int snapOrigin = 2; // Top, Middle, Bottom
+            const char *origins[] = { "Top", "Middle", "Bottom" };
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo("##SnapOriginDemo", &snapOrigin, origins, 3);
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[ AUTHORIZED SIMULATOR ]");
+            ImGui::Text("Polyfield binary remains unmodified.");
+            EndCard();
             ImGui::EndChild();
         }
 

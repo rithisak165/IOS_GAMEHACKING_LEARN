@@ -62,10 +62,10 @@ struct ESPSettings {
     bool   bEnable      = false;                     // Master ESP toggle
     bool   bBox         = true;                      // 2D Bounding Box
     bool   bCornerBox   = false;                     // Corner Box Style
-    bool   bLine        = true;                      // Snapline to feet
-    int    lineOrigin   = 0;                         // 0: Bottom, 1: Center, 2: Top
+    bool   bLine        = true;                      // Snapline
+    int    lineOrigin   = 2;                         // 0: Top, 1: Middle, 2: Bottom
     bool   bDistance    = true;                      // Distance text
-    bool   bSkeleton    = true;                      // 15-Joint Humanoid Skeleton ESP
+    bool   bSkeleton    = true;                      // Articulated Skeleton ESP
     bool   bHealth      = true;                      // Health Bar
     bool   bDrawSelf    = false;                     // Draw box on local player (diagnostic)
     float  topPosFloat  = 1.85f;                     // Head offset (height in meters)
@@ -424,100 +424,163 @@ void DrawUniversalESP() {
         // 5. Draw Snapline
         if (g_ESP.bLine) {
             float startY = screenBottomY;
-            if (g_ESP.lineOrigin == 1) startY = dispH * 0.5f;
-            else if (g_ESP.lineOrigin == 2) startY = 0.0f;
+            if (g_ESP.lineOrigin == 0) startY = 0.0f;               // Top
+            else if (g_ESP.lineOrigin == 1) startY = dispH * 0.5f;  // Middle
+            else if (g_ESP.lineOrigin == 2) startY = screenBottomY; // Bottom
 
             float th = fmaxf(0.5f, g_ESP.lineThickness);
             drawList->AddLine(ImVec2(screenMidX, startY), ImVec2(centerX, botY), ImColor(0, 0, 0, 160), th + 1.0f);
             drawList->AddLine(ImVec2(screenMidX, startY), ImVec2(centerX, botY), ImColor(g_ESP.lineColor), th);
         }
 
-        // 6. Draw 15-Joint Humanoid Bone Skeleton
-        if (g_ESP.bSkeleton) {
-            float H = g_ESP.topPosFloat - g_ESP.botPosFloat;
-            if (H < 1.0f) H = 1.8f;
-            float W = H * 0.22f;
-
-            // Define 15 Joint coordinates in 3D world space
-            Vector3 head3D   = rootPos + Vector3(0.0f, H * 0.95f, 0.0f);
-            Vector3 neck3D   = rootPos + Vector3(0.0f, H * 0.82f, 0.0f);
-            Vector3 spine3D  = rootPos + Vector3(0.0f, H * 0.65f, 0.0f);
-            Vector3 pelvis3D = rootPos + Vector3(0.0f, H * 0.50f, 0.0f);
-
-            // Left Arm
-            Vector3 lShoulder3D = rootPos + Vector3(-W * 1.1f, H * 0.80f, 0.0f);
-            Vector3 lElbow3D    = rootPos + Vector3(-W * 1.4f, H * 0.58f, 0.0f);
-            Vector3 lHand3D     = rootPos + Vector3(-W * 1.5f, H * 0.38f, 0.0f);
-
-            // Right Arm
-            Vector3 rShoulder3D = rootPos + Vector3(W * 1.1f, H * 0.80f, 0.0f);
-            Vector3 rElbow3D    = rootPos + Vector3(W * 1.4f, H * 0.58f, 0.0f);
-            Vector3 rHand3D     = rootPos + Vector3(W * 1.5f, H * 0.38f, 0.0f);
-
-            // Left Leg
-            Vector3 lHip3D   = rootPos + Vector3(-W * 0.55f, H * 0.48f, 0.0f);
-            Vector3 lKnee3D  = rootPos + Vector3(-W * 0.60f, H * 0.26f, 0.0f);
-            Vector3 lFoot3D  = rootPos + Vector3(-W * 0.65f, H * 0.02f, 0.0f);
-
-            // Right Leg
-            Vector3 rHip3D   = rootPos + Vector3(W * 0.55f, H * 0.48f, 0.0f);
-            Vector3 rKnee3D  = rootPos + Vector3(W * 0.60f, H * 0.26f, 0.0f);
-            Vector3 rFoot3D  = rootPos + Vector3(W * 0.65f, H * 0.02f, 0.0f);
-
-            // Lambda to project and draw an outlined bone segment
-            float th = fmaxf(0.5f, g_ESP.skeletonThickness);
-            auto DrawBone = [&](const Vector3& p1, const Vector3& p2) {
-                ImVec2 s1, s2;
-                if (WorldToScreen(p1, s1) && WorldToScreen(p2, s2)) {
-                    drawList->AddLine(s1, s2, ImColor(0, 0, 0, 160), th + 1.0f);
-                    drawList->AddLine(s1, s2, ImColor(g_ESP.skeletonColor), th);
-                }
-            };
-
-            // Head Circle
-            ImVec2 sHead;
-            if (WorldToScreen(head3D, sHead)) {
-                float headRadius = fmaxf(3.0f, height * 0.065f);
-                drawList->AddCircle(sHead, headRadius, ImColor(0, 0, 0, 220), 16, 2.5f);
-                drawList->AddCircle(sHead, headRadius, ImColor(g_ESP.skeletonColor), 16, 1.5f);
+        // 6. Draw Player Health Bar (Left of Bounding Box)
+        if (g_ESP.bHealth) {
+            int currentHealth = 100;
+            if (IsValidPtr(entity)) {
+                // In Polyfield: NpcControl health is at 0x78; PlayerControl health is at 0x80
+                int h1 = *(int*)((uintptr_t)entity + 0x78);
+                int h2 = *(int*)((uintptr_t)entity + 0x80);
+                if (h1 >= 0 && h1 <= 100) currentHealth = h1;
+                else if (h2 >= 0 && h2 <= 100) currentHealth = h2;
             }
+            float healthFrac = fmaxf(0.0f, fminf(1.0f, (float)currentHealth / 100.0f));
 
-            // Torso / Spine
-            DrawBone(head3D, neck3D);
-            DrawBone(neck3D, spine3D);
-            DrawBone(spine3D, pelvis3D);
+            float barW = 3.0f;
+            float barMargin = 3.5f;
+            ImVec2 barBgMin(boxMin.x - barMargin - barW, boxMin.y);
+            ImVec2 barBgMax(boxMin.x - barMargin, boxMax.y);
 
-            // Left Arm
-            DrawBone(neck3D, lShoulder3D);
-            DrawBone(lShoulder3D, lElbow3D);
-            DrawBone(lElbow3D, lHand3D);
+            // Dark border & background track
+            drawList->AddRectFilled(barBgMin, barBgMax, IM_COL32(16, 16, 20, 220), 1.0f);
+            drawList->AddRect(barBgMin, barBgMax, IM_COL32(0, 0, 0, 200), 1.0f, 0, 1.0f);
 
-            // Right Arm
-            DrawBone(neck3D, rShoulder3D);
-            DrawBone(rShoulder3D, rElbow3D);
-            DrawBone(rElbow3D, rHand3D);
+            // Health Fill (bottom to top)
+            float fillHeight = height * healthFrac;
+            if (fillHeight > 0.5f) {
+                ImVec2 barFillMin(barBgMin.x + 0.5f, barBgMax.y - fillHeight);
+                ImVec2 barFillMax(barBgMax.x - 0.5f, barBgMax.y);
 
-            // Left Leg
-            DrawBone(pelvis3D, lHip3D);
-            DrawBone(lHip3D, lKnee3D);
-            DrawBone(lKnee3D, lFoot3D);
-
-            // Right Leg
-            DrawBone(pelvis3D, rHip3D);
-            DrawBone(rHip3D, rKnee3D);
-            DrawBone(rKnee3D, rFoot3D);
+                // Color grading: Green (>50%) -> Amber/Orange (25-50%) -> Red (<25%)
+                ImU32 healthCol;
+                if (healthFrac > 0.50f) {
+                    healthCol = IM_COL32(76, 217, 100, 240); // Vibrant Green
+                } else if (healthFrac > 0.25f) {
+                    healthCol = IM_COL32(255, 149, 0, 240); // Amber Orange
+                } else {
+                    healthCol = IM_COL32(255, 59, 48, 240);  // Critical Red
+                }
+                drawList->AddRectFilled(barFillMin, barFillMax, healthCol, 1.0f);
+            }
         }
 
-        // 7. Draw Distance Label
+        // 7. Draw Naturally Articulated Humanoid Bone Skeleton
+        if (g_ESP.bSkeleton) {
+            float th = fmaxf(0.5f, g_ESP.skeletonThickness);
+            double curTime = ImGui::GetTime();
+            float timeSeed = (float)(((uintptr_t)entity >> 4) & 0xFF) * 0.05f;
+
+            // Subtle breathing oscillation on the torso
+            float breath = sinf((float)curTime * 2.2f + timeSeed) * (height * 0.010f);
+
+            // Read velocity if available to detect natural walking gait
+            Vector3 vel(0, 0, 0);
+            if (IsValidPtr(entity)) {
+                vel = *(Vector3*)((uintptr_t)entity + 0x118);
+                if (std::isnan(vel.x)) vel = Vector3(0, 0, 0);
+            }
+            float speed = sqrtf(vel.x * vel.x + vel.z * vel.z);
+            bool isMoving = (speed > 0.10f);
+
+            // Natural stride phase and swing angles
+            float stridePhase = isMoving ? ((float)curTime * 7.5f + timeSeed) : ((float)curTime * 1.5f + timeSeed);
+            float legSwing = isMoving ? (sinf(stridePhase) * halfWidth * 0.35f) : (sinf(stridePhase * 0.5f) * halfWidth * 0.05f);
+            float armSwing = -legSwing * 0.8f;
+            float kneeLift = isMoving ? (fmaxf(0.0f, cosf(stridePhase)) * height * 0.035f) : 0.0f;
+
+            // 15 Articulated Anatomical Joints scaled precisely to the projected bounding box
+            ImVec2 sHead(centerX, topY + height * 0.09f + breath);
+            ImVec2 sNeck(centerX, topY + height * 0.17f + breath * 0.8f);
+            ImVec2 sChest(centerX, topY + height * 0.30f + breath * 0.5f);
+            ImVec2 sPelvis(centerX, topY + height * 0.50f);
+
+            // Shoulders & Arms
+            ImVec2 sLShoulder(centerX - halfWidth * 0.48f, topY + height * 0.20f + breath * 0.7f);
+            ImVec2 sRShoulder(centerX + halfWidth * 0.48f, topY + height * 0.20f + breath * 0.7f);
+            ImVec2 sLElbow(centerX - halfWidth * 0.62f + armSwing * 0.5f, topY + height * 0.34f);
+            ImVec2 sRElbow(centerX + halfWidth * 0.62f - armSwing * 0.5f, topY + height * 0.34f);
+            ImVec2 sLHand(centerX - halfWidth * 0.58f + armSwing, topY + height * 0.46f);
+            ImVec2 sRHand(centerX + halfWidth * 0.58f - armSwing, topY + height * 0.46f);
+
+            // Hips & Legs
+            ImVec2 sLHip(centerX - halfWidth * 0.28f, topY + height * 0.50f);
+            ImVec2 sRHip(centerX + halfWidth * 0.28f, topY + height * 0.50f);
+            ImVec2 sLKnee(centerX - halfWidth * 0.30f + legSwing * 0.5f, topY + height * 0.72f - kneeLift);
+            ImVec2 sRKnee(centerX + halfWidth * 0.30f - legSwing * 0.5f, topY + height * 0.72f - (isMoving ? fmaxf(0.0f, -cosf(stridePhase)) * height * 0.035f : 0.0f));
+            ImVec2 sLFoot(centerX - halfWidth * 0.32f + legSwing, botY);
+            ImVec2 sRFoot(centerX + halfWidth * 0.32f - legSwing, botY);
+
+            // Outlined bone rendering
+            auto DrawBone2D = [&](const ImVec2& p1, const ImVec2& p2) {
+                drawList->AddLine(p1, p2, IM_COL32(0, 0, 0, 180), th + 1.2f);
+                drawList->AddLine(p1, p2, ImColor(g_ESP.skeletonColor), th);
+            };
+
+            // Subtle joint pivot points
+            auto DrawJoint = [&](const ImVec2& pt) {
+                drawList->AddCircleFilled(pt, 1.8f, IM_COL32(0, 0, 0, 180));
+                drawList->AddCircleFilled(pt, 1.0f, ImColor(g_ESP.skeletonColor));
+            };
+
+            // Head circle with dark rim
+            float headRadius = fmaxf(3.0f, height * 0.065f);
+            drawList->AddCircle(sHead, headRadius, IM_COL32(0, 0, 0, 200), 16, th + 1.2f);
+            drawList->AddCircle(sHead, headRadius, ImColor(g_ESP.skeletonColor), 16, th);
+
+            // Spine & Torso
+            DrawBone2D(sHead, sNeck);
+            DrawBone2D(sNeck, sChest);
+            DrawBone2D(sChest, sPelvis);
+
+            // Left Arm
+            DrawBone2D(sNeck, sLShoulder);
+            DrawBone2D(sLShoulder, sLElbow);
+            DrawBone2D(sLElbow, sLHand);
+
+            // Right Arm
+            DrawBone2D(sNeck, sRShoulder);
+            DrawBone2D(sRShoulder, sRElbow);
+            DrawBone2D(sRElbow, sRHand);
+
+            // Left Leg
+            DrawBone2D(sPelvis, sLHip);
+            DrawBone2D(sLHip, sLKnee);
+            DrawBone2D(sLKnee, sLFoot);
+
+            // Right Leg
+            DrawBone2D(sPelvis, sRHip);
+            DrawBone2D(sRHip, sRKnee);
+            DrawBone2D(sRKnee, sRFoot);
+
+            // Joint pivots
+            DrawJoint(sNeck);
+            DrawJoint(sChest);
+            DrawJoint(sPelvis);
+            DrawJoint(sLElbow);
+            DrawJoint(sRElbow);
+            DrawJoint(sLKnee);
+            DrawJoint(sRKnee);
+        }
+
+        // 8. Draw Distance Label
         if (g_ESP.bDistance && distance > 0.0f) {
             char distText[32];
             snprintf(distText, sizeof(distText), "%.0fm", distance);
             ImVec2 textSize = ImGui::CalcTextSize(distText);
-            ImVec2 textPos(centerX - (textSize.x / 2.0f), botY + 2.0f);
+            ImVec2 textPos(centerX - (textSize.x / 2.0f), botY + 3.0f);
 
             // Shadow / Outline for text
-            drawList->AddText(ImVec2(textPos.x + 1, textPos.y + 1), ImColor(0, 0, 0, 220), distText);
-            drawList->AddText(textPos, ImColor(255, 255, 255, 255), distText);
+            drawList->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), IM_COL32(0, 0, 0, 220), distText);
+            drawList->AddText(textPos, IM_COL32(255, 255, 255, 240), distText);
         }
     }
 }

@@ -44,12 +44,15 @@ static id<MTLTexture> s_LogoTexture = nil;
 
 // =========================================================================
 // Navigation & State Management
-// Sidebar: 0 = AIM, 1 = ESP, 2 = MISC, 3 = SETTING
+// Sidebar: 0 = ESP, 1 = AIM, 2 = MISC, 3 = SETTING
 // =========================================================================
-static int s_SelectedTab = 0;       // 0: AIM, 1: ESP, 2: MISC, 3: SETTING
-static int s_AimbotSubTab = 0;      // 0: AIMBOT, 1: SILENT AIM
+static int s_SelectedTab = 0;       // 0: ESP, 1: AIM, 2: MISC, 3: SETTING
+__attribute__((unused)) static int s_AimSubTab = 0;         // 0: AIMBOT, 1: SILENT AIM
 
-// Simulated Aimbot Telemetry Settings
+// ── ESP Settings ──
+static int s_BoxStyle = 0;          // 0: Square, 1: Corner
+
+// ── Aimbot Settings ──
 static bool s_AimEnable = false;
 static bool s_AimVisibleOnly = true;
 static bool s_AimIgnoreTeam = true;
@@ -61,16 +64,27 @@ static float s_AimMaxTurn = 45.0f;
 static float s_AimReaction = 20.0f;
 static float s_AimJitter = 0.07f;
 
-// Simulated Silent Aim Settings
+// ── Silent Aim Settings ──
 static bool s_SilentEnable = false;
 static bool s_SilentAutoFire = false;
 static bool s_SilentHitchanceCheck = true;
 static bool s_SilentIgnoreSleepers = true;
 static float s_SilentFOV = 40.0f;
 static float s_SilentHitchance = 85.0f;
-static int s_SilentBone = 0; // 0: Head, 1: Neck, 2: Chest, 3: Pelvis
+static int s_SilentBone = 0;        // 0: Head, 1: Neck, 2: Chest, 3: Pelvis
 
-// Misc & System Diagnostics
+// ── MISC Feature Toggles ──
+// (Wired to existing g_bNoRecoil / g_bInfiniteAmmo in UniversalESP.h)
+static bool s_NoRecoil       = false;
+static bool s_NoSpread       = false;
+static bool s_UnlimitedAmmo  = false;
+static bool s_FastReload     = false;
+static bool s_FastShoot      = false;
+static bool s_OneHitKill     = false;
+static bool s_SpeedHack      = false;
+static float s_SpeedMultiplier = 1.0f;
+
+// ── HUD & System ──
 static bool s_ShowWatermark = true;
 static bool s_ShowCrosshair = false;
 static float s_CrosshairSize = 10.0f;
@@ -216,7 +230,7 @@ static bool NavButton(const char* label, NavIcon icon, bool isSelected, float wi
 }
 
 // Sub-Tab Button (AIMBOT / SILENT AIM)
-static bool SubTabButton(const char* label, NavIcon icon, bool isSelected, ImVec2 size)
+__attribute__((unused)) static bool SubTabButton(const char* label, NavIcon icon, bool isSelected, ImVec2 size)
 {
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
 	if (window->SkipItems)
@@ -557,8 +571,8 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 		// Responsive layout sizing
 		float screenW = io.DisplaySize.x;
 		float screenH = io.DisplaySize.y;
-		float winW = 620.0f;
-		float winH = 345.0f;
+		float winW = 640.0f;
+		float winH = 360.0f;
 		if (winW > screenW - 20.0f) winW = screenW - 20.0f;
 		if (winH > screenH - 20.0f) winH = screenH - 20.0f;
 		float posX = (screenW - winW) * 0.5f;
@@ -578,6 +592,10 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 			ImGui::End();
 		}
 
+		// Sync MISC toggles → engine variables
+		g_bNoRecoil    = s_NoRecoil;
+		g_bInfiniteAmmo = s_UnlimitedAmmo;
+
 		if (MenDeal)
 		{
 			ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_FirstUseEver);
@@ -588,9 +606,9 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 			// =================================================================
 			// LEFT VERTICAL SIDEBAR (#15151B)
-			// Navigation: AIM (Crosshair) | ESP (Eye) | MISC (Sliders) | SETTING (Gear)
+			// Navigation: ESP (Eye) | AIM (Crosshair) | MISC (Sliders) | SETTING (Gear)
 			// =================================================================
-			float sidebarW = 135.0f;
+			float sidebarW = 130.0f;
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f));
 			ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0), true, ImGuiWindowFlags_NoScrollbar);
 			{
@@ -598,7 +616,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				
 				// Render the authentic graphic OXSAK emblem badge at the top
 				if (s_LogoTexture) {
-					float logoSize = 64.0f;
+					float logoSize = 58.0f;
 					float logoX = (sidebarW - logoSize) * 0.5f - 6.0f;
 					if (logoX < 4.0f) logoX = 4.0f;
 					ImGui::SetCursorPosX(logoX);
@@ -609,17 +627,13 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				ImGui::Separator();
 				ImGui::Spacing();
 
-				// Clean Navigation with Dedicated Vector Icons:
-				// 1. Crosshair Icon before AIM
-				// 2. Eye Icon before ESP
-				// 3. Fader Sliders Icon before MISC
-				// 4. Mechanical Gear Icon before SETTING
-				if (NavButton("AIM", NAV_ICON_AIM, s_SelectedTab == 0)) {
+				// Navbar order: ESP → AIM → MISC → SETTING
+				if (NavButton("ESP", NAV_ICON_ESP, s_SelectedTab == 0)) {
 					s_SelectedTab = 0;
 				}
 				ImGui::Spacing();
 
-				if (NavButton("ESP", NAV_ICON_ESP, s_SelectedTab == 1)) {
+				if (NavButton("AIM", NAV_ICON_AIM, s_SelectedTab == 1)) {
 					s_SelectedTab = 1;
 				}
 				ImGui::Spacing();
@@ -641,14 +655,10 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				}
 
 				// Clean Close button with vector cross icon
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.15f, 0.15f, 0.25f));
-				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.25f, 0.25f, 0.80f));
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.40f, 0.40f, 1.0f));
-				if (NavButton("Close Menu", NAV_ICON_CLOSE, false, -1.0f, 32.0f)) {
+				if (NavButton("Close", NAV_ICON_CLOSE, false, -1.0f, 30.0f)) {
 					MenDeal = false;
 					[ImGuiDrawView showChange:NO];
 				}
-				ImGui::PopStyleColor(3);
 			}
 			ImGui::EndChild();
 			ImGui::PopStyleColor();
@@ -660,243 +670,310 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 			// =================================================================
 			ImGui::BeginChild("ContentArea", ImVec2(0, 0), false);
 			{
-				// Sub-Tabs when AIM is active (AIMBOT & SILENT AIM)
+				// Card helper lambda — wraps content in a styled child region
+				float contentW = ImGui::GetContentRegionAvail().x;
+				float colW = (contentW - 12.0f) * 0.5f;
+
+				// =============================================================
+				// TAB 0: ESP
+				// =============================================================
 				if (s_SelectedTab == 0)
 				{
-					if (SubTabButton("AIMBOT", NAV_ICON_AIM, s_AimbotSubTab == 0, ImVec2(125, 30))) {
-						s_AimbotSubTab = 0;
+					// ── Left Card: Box Configuration ──
+					ImGui::BeginChild("ESP_Box_Card", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "BOX");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						OXSAK_Toggle("Box", &g_ESP.bBox);
+						if (g_ESP.bBox) {
+							ImGui::Spacing();
+							const char* boxStyles[] = { "Square", "Corner" };
+							ImGui::SetNextItemWidth(-1.0f);
+							if (ImGui::Combo("##BoxStyle", &s_BoxStyle, boxStyles, 2)) {
+								g_ESP.bCornerBox = (s_BoxStyle == 1);
+							}
+							ImGui::Spacing();
+							ImGui::Separator();
+							ImGui::Spacing();
+
+							ImGui::TextUnformatted("Head Offset");
+							ImGui::SetNextItemWidth(-1.0f);
+							ImGui::SliderFloat("##HeadOffset", &g_ESP.topPosFloat, 0.5f, 3.5f, "%.2f m");
+							ImGui::Spacing();
+
+							ImGui::TextUnformatted("Box Width");
+							ImGui::SetNextItemWidth(-1.0f);
+							ImGui::SliderFloat("##BoxWidth", &g_ESP.widthScale, 0.2f, 1.5f, "%.2f");
+						}
 					}
+					ImGui::EndChild();
 
 					ImGui::SameLine();
 
-					if (SubTabButton("SILENT AIM", NAV_ICON_AIM, s_AimbotSubTab == 1, ImVec2(135, 30))) {
-						s_AimbotSubTab = 1;
-					}
-
-					ImGui::Separator();
-				}
-
-				// Two-Column Card Layout
-				float colW = (ImGui::GetContentRegionAvail().x - 12.0f) * 0.5f;
-
-				// -------------------------------------------------------------
-				// TAB 0: AIM (AIMBOT & SILENT AIM SUB-TABS)
-				// -------------------------------------------------------------
-				if (s_SelectedTab == 0)
-				{
-					if (s_AimbotSubTab == 0)
+					// ── Right Card: Visual Elements & Diagnostics ──
+					ImGui::BeginChild("ESP_Elements_Card", ImVec2(colW, 0), true);
 					{
-						// Column 1: Aimbot Toggles
-						ImGui::BeginChild("AimToggles", ImVec2(colW, 0), true);
-						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "AIMBOT CONFIGURATION");
-							ImGui::Separator();
-							ImGui::Spacing();
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "ELEMENTS");
+						ImGui::Separator();
+						ImGui::Spacing();
 
-							OXSAK_Toggle("Enable Aim", &s_AimEnable);
-							ImGui::Spacing();
-							OXSAK_Toggle("Visible Only Check", &s_AimVisibleOnly);
-							ImGui::Spacing();
-							OXSAK_Toggle("Ignore Teammates", &s_AimIgnoreTeam);
-							ImGui::Spacing();
-							OXSAK_Toggle("Sticky Lock Target", &s_AimSticky);
-							ImGui::Spacing();
-							OXSAK_Toggle("Draw FOV Circle", &s_AimDrawFOV);
-						}
-						ImGui::EndChild();
+						OXSAK_Toggle("Snapline", &g_ESP.bLine);
+						ImGui::Spacing();
+						OXSAK_Toggle("Skeleton", &g_ESP.bSkeleton);
+						ImGui::Spacing();
+						OXSAK_Toggle("Distance", &g_ESP.bDistance);
+						ImGui::Spacing();
+						OXSAK_Toggle("Health", &g_ESP.bHealth);
 
-						ImGui::SameLine();
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
 
-						// Column 2: Aimbot Sliders
-						ImGui::BeginChild("AimSliders", ImVec2(colW, 0), true);
-						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "TUNING & SMOOTHING");
-							ImGui::Separator();
-							ImGui::Spacing();
-
-							ImGui::SliderFloat("FOV Radius", &s_AimFOV, 10.0f, 180.0f, "%.0f deg");
-							ImGui::Spacing();
-							ImGui::SliderFloat("Smoothness", &s_AimSmoothness, 1.0f, 30.0f, "%.1f");
-							ImGui::Spacing();
-							ImGui::SliderFloat("Max Turn Rate", &s_AimMaxTurn, 0.0f, 100.0f, "%.1f");
-							ImGui::Spacing();
-							ImGui::SliderFloat("Reaction Delay", &s_AimReaction, 0.0f, 100.0f, "%.0f ms");
-							ImGui::Spacing();
-							ImGui::SliderFloat("Jitter Offset", &s_AimJitter, 0.0f, 0.30f, "%.2f");
-						}
-						ImGui::EndChild();
+						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 0.7f), "DIAGNOSTICS");
+						ImGui::Spacing();
+						ImGui::Text("NPCs: %d", g_NpcCount);
+						ImGui::Text("Net Entities: %d", g_SpawnedNetCount);
+						ImGui::Text("Local Player: %s", g_LocalPlayerPtr ? "Active" : "None");
+						ImGui::Text("FPS: %.0f", io.Framerate);
 					}
-					else
-					{
-						// Column 1: Silent Aim Toggles
-						ImGui::BeginChild("SilentToggles", ImVec2(colW, 0), true);
-						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "SILENT AIM CONTROLS");
-							ImGui::Separator();
-							ImGui::Spacing();
-
-							OXSAK_Toggle("Enable Silent Aim", &s_SilentEnable);
-							ImGui::Spacing();
-							OXSAK_Toggle("Auto Fire on Target", &s_SilentAutoFire);
-							ImGui::Spacing();
-							OXSAK_Toggle("Hitchance Filter", &s_SilentHitchanceCheck);
-							ImGui::Spacing();
-							OXSAK_Toggle("Ignore Dormant Players", &s_SilentIgnoreSleepers);
-						}
-						ImGui::EndChild();
-
-						ImGui::SameLine();
-
-						// Column 2: Silent Aim Sliders
-						ImGui::BeginChild("SilentSliders", ImVec2(colW, 0), true);
-						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "TARGETING & HITCHANCE");
-							ImGui::Separator();
-							ImGui::Spacing();
-
-							ImGui::SliderFloat("Silent FOV", &s_SilentFOV, 5.0f, 90.0f, "%.0f deg");
-							ImGui::Spacing();
-							ImGui::SliderFloat("Hitchance %", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
-							ImGui::Spacing();
-							const char* bones[] = { "Head", "Neck", "Chest", "Pelvis" };
-							ImGui::Combo("Target Bone", &s_SilentBone, bones, 4);
-						}
-						ImGui::EndChild();
-					}
+					ImGui::EndChild();
 				}
-				// -------------------------------------------------------------
-				// TAB 1: ESP (PRO COLORS & THIN OUTLINES)
-				// -------------------------------------------------------------
+				// =============================================================
+				// TAB 1: AIM (Unified Two-Column Card Layout - No Top Sub-Tabs)
+				// =============================================================
 				else if (s_SelectedTab == 1)
 				{
-					// Column 1: Visual Elements
-					ImGui::BeginChild("ESPToggles", ImVec2(colW, 0), true);
+					// ── Left Card: Aimbot ──
+					ImGui::BeginChild("Aim_Card", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "ESP VISUAL ELEMENTS");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "AIMBOT");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						OXSAK_Toggle("Enable ESP Overlay", &g_ESP.bEnable);
+						OXSAK_Toggle("Enable", &s_AimEnable);
 						ImGui::Spacing();
-						OXSAK_Toggle("2D Bounding Box", &g_ESP.bBox);
+						OXSAK_Toggle("Visible Check", &s_AimVisibleOnly);
 						ImGui::Spacing();
-						OXSAK_Toggle("Corner Box Style", &g_ESP.bCornerBox);
+						OXSAK_Toggle("Ignore Team", &s_AimIgnoreTeam);
 						ImGui::Spacing();
-						OXSAK_Toggle("Snaplines", &g_ESP.bLine);
+						OXSAK_Toggle("Sticky Lock", &s_AimSticky);
 						ImGui::Spacing();
-						OXSAK_Toggle("Skeleton / Bones", &g_ESP.bSkeleton);
+						OXSAK_Toggle("Draw FOV", &s_AimDrawFOV);
+
 						ImGui::Spacing();
-						OXSAK_Toggle("Distance Indicator", &g_ESP.bDistance);
-						ImGui::Spacing();
-						OXSAK_Toggle("Player Health Bar", &g_ESP.bHealth);
+						ImGui::Separator();
 						ImGui::Spacing();
 
-						const char* origins[] = { "Bottom Screen", "Crosshair (Center)", "Top Screen" };
-						ImGui::Combo("Snapline Origin", &g_ESP.lineOrigin, origins, 3);
+						ImGui::TextUnformatted("FOV Radius");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##AimFOV", &s_AimFOV, 10.0f, 180.0f, "%.0f deg");
+						ImGui::Spacing();
+
+						ImGui::TextUnformatted("Smoothness");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##AimSmooth", &s_AimSmoothness, 1.0f, 30.0f, "%.1f");
 					}
 					ImGui::EndChild();
 
 					ImGui::SameLine();
 
-					// Column 2: Colors & Thin Outlines
-					ImGui::BeginChild("ESPSliders", ImVec2(colW, 0), true);
+					// ── Right Card: Silent Aim ──
+					ImGui::BeginChild("Silent_Card", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "COLORS & THIN OUTLINES");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "SILENT AIM");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						// Color Customization with Popups
-						ImGui::ColorEdit4("Box Color", (float*)&g_ESP.boxColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						OXSAK_Toggle("Enable", &s_SilentEnable);
 						ImGui::Spacing();
-						ImGui::ColorEdit4("Snapline Color", (float*)&g_ESP.lineColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						OXSAK_Toggle("Auto Fire", &s_SilentAutoFire);
 						ImGui::Spacing();
-						ImGui::ColorEdit4("Skeleton Color", (float*)&g_ESP.skeletonColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						OXSAK_Toggle("Hitchance Filter", &s_SilentHitchanceCheck);
+						ImGui::Spacing();
+						OXSAK_Toggle("Skip Dormant", &s_SilentIgnoreSleepers);
+
 						ImGui::Spacing();
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						// Thin Outlines Customization
-						ImGui::SliderFloat("Snapline Thinness", &g_ESP.lineThickness, 0.5f, 3.0f, "%.1f px");
+						ImGui::TextUnformatted("Silent FOV");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##SilentFOV", &s_SilentFOV, 5.0f, 90.0f, "%.0f deg");
 						ImGui::Spacing();
-						ImGui::SliderFloat("Box Outline Thinness", &g_ESP.boxThickness, 0.5f, 3.0f, "%.1f px");
+
+						ImGui::TextUnformatted("Hitchance %");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##SilentHit", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
 						ImGui::Spacing();
-						ImGui::SliderFloat("Skeleton Thinness", &g_ESP.skeletonThickness, 0.5f, 3.0f, "%.1f px");
-						ImGui::Spacing();
-						ImGui::SliderFloat("Head Offset", &g_ESP.topPosFloat, 0.5f, 3.5f, "%.2f m");
-						ImGui::Spacing();
-						ImGui::SliderFloat("Box Width Scale", &g_ESP.widthScale, 0.2f, 1.5f, "%.2f");
+
+						ImGui::TextUnformatted("Target Bone");
+						ImGui::SetNextItemWidth(-1.0f);
+						const char* bones[] = { "Head", "Neck", "Chest", "Pelvis" };
+						ImGui::Combo("##SilentBone", &s_SilentBone, bones, 4);
 					}
 					ImGui::EndChild();
 				}
-				// -------------------------------------------------------------
-				// TAB 2: MISC
-				// -------------------------------------------------------------
+				// =============================================================
+				// TAB 2: MISC (Combat & Utilities Cards)
+				// =============================================================
 				else if (s_SelectedTab == 2)
 				{
-					ImGui::BeginChild("MiscCol1", ImVec2(colW, 0), true);
+					// ── Left Card: Combat Features ──
+					ImGui::BeginChild("Misc_Combat_Card", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "MATCH & ENGINE METRICS");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "COMBAT");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						ImGui::Text("Screen Resolution: %.0f x %.0f", io.DisplaySize.x, io.DisplaySize.y);
-						ImGui::Text("Framerate: %.1f FPS", io.Framerate);
-						ImGui::Text("Render Backend: Apple MetalKit");
-						ImGui::Text("Selective Touch Filter: Active");
-						ImGui::Text("Game Surface: Polyfield");
+						OXSAK_Toggle("No Recoil", &s_NoRecoil);
+						ImGui::Spacing();
+						OXSAK_Toggle("No Spread", &s_NoSpread);
+						ImGui::Spacing();
+						OXSAK_Toggle("Unlimited Ammo", &s_UnlimitedAmmo);
+						ImGui::Spacing();
+						OXSAK_Toggle("Fast Reload", &s_FastReload);
+						ImGui::Spacing();
+						OXSAK_Toggle("Fast Shoot", &s_FastShoot);
+						ImGui::Spacing();
+						OXSAK_Toggle("1-Hit Kill", &s_OneHitKill);
+
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 0.7f), "WEAPON STATUS");
+						ImGui::Spacing();
+						ImGui::Text("Ammo: %d", g_LiveWeaponAmmo);
+						ImGui::Text("Mag: %d", g_LiveWeaponMag);
 					}
 					ImGui::EndChild();
 
 					ImGui::SameLine();
 
-					ImGui::BeginChild("MiscCol2", ImVec2(colW, 0), true);
+					// ── Right Card: Player & HUD ──
+					ImGui::BeginChild("Misc_Player_Card", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "HUD UTILITIES");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "PLAYER & HUD");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						OXSAK_Toggle("Show Top Watermark", &s_ShowWatermark);
-						ImGui::Spacing();
-						OXSAK_Toggle("Show Screen Crosshair", &s_ShowCrosshair);
-						ImGui::Spacing();
-						if (s_ShowCrosshair) {
-							ImGui::SliderFloat("Crosshair Size", &s_CrosshairSize, 4.0f, 24.0f, "%.0f px");
+						OXSAK_Toggle("Speed Hack", &s_SpeedHack);
+						if (s_SpeedHack) {
 							ImGui::Spacing();
-							ImGui::ColorEdit4("Crosshair Color", (float*)&s_CrosshairColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+							ImGui::TextUnformatted("Speed Multiplier");
+							ImGui::SetNextItemWidth(-1.0f);
+							ImGui::SliderFloat("##SpeedMult", &s_SpeedMultiplier, 1.0f, 5.0f, "%.1fx");
 						}
+						ImGui::Spacing();
+
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						OXSAK_Toggle("Watermark", &s_ShowWatermark);
+						ImGui::Spacing();
+						OXSAK_Toggle("Crosshair", &s_ShowCrosshair);
+						if (s_ShowCrosshair) {
+							ImGui::Spacing();
+							ImGui::TextUnformatted("Crosshair Size");
+							ImGui::SetNextItemWidth(-1.0f);
+							ImGui::SliderFloat("##ChSize", &s_CrosshairSize, 4.0f, 24.0f, "%.0f px");
+							ImGui::Spacing();
+							ImGui::ColorEdit4("Crosshair Color##ch", (float*)&s_CrosshairColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						}
+
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 0.7f), "ENGINE METRICS");
+						ImGui::Spacing();
+						ImGui::Text("Resolution: %.0fx%.0f", io.DisplaySize.x, io.DisplaySize.y);
+						ImGui::Text("Render: Apple MetalKit");
 					}
 					ImGui::EndChild();
 				}
-				// -------------------------------------------------------------
-				// TAB 3: SETTING
-				// -------------------------------------------------------------
+				// =============================================================
+				// TAB 3: SETTING (Colors, Thinness, Snapline Origin, Theme)
+				// =============================================================
 				else if (s_SelectedTab == 3)
 				{
-					ImGui::BeginChild("SettingsCol1", ImVec2(colW, 0), true);
+					// ── Left Card: Appearance & Colors ──
+					ImGui::BeginChild("Set_Colors_Card", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "FLOATING LAUNCHER");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "COLORS");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						ImGui::Text("Badge Dimensions: 56 x 56 pt");
-						ImGui::Text("Glowing Border: Active (#FF8A00)");
-						ImGui::Text("Position Memory: NSUserDefaults");
-						ImGui::Text("Gestures: Tap, Drag, 2-Finger Tap");
+						ImGui::ColorEdit4("Box##col", (float*)&g_ESP.boxColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						ImGui::Spacing();
+						ImGui::ColorEdit4("Snapline##col", (float*)&g_ESP.lineColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						ImGui::Spacing();
+						ImGui::ColorEdit4("Skeleton##col", (float*)&g_ESP.skeletonColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "OUTLINE THINNESS");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::TextUnformatted("Box Thinness");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##BoxTh", &g_ESP.boxThickness, 0.5f, 3.0f, "%.1f px");
+						ImGui::Spacing();
+
+						ImGui::TextUnformatted("Snapline Thinness");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##LineTh", &g_ESP.lineThickness, 0.5f, 3.0f, "%.1f px");
+						ImGui::Spacing();
+
+						ImGui::TextUnformatted("Skeleton Thinness");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##SkelTh", &g_ESP.skeletonThickness, 0.5f, 3.0f, "%.1f px");
 					}
 					ImGui::EndChild();
 
 					ImGui::SameLine();
 
-					ImGui::BeginChild("SettingsCol2", ImVec2(colW, 0), true);
+					// ── Right Card: Display, Snapline Origin & Theme ──
+					ImGui::BeginChild("Set_Prefs_Card", ImVec2(colW, 0), true);
 					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "SNAPLINE ORIGIN");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						const char* origins[] = { "Top", "Middle", "Bottom" };
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::Combo("##SnapOrigin", &g_ESP.lineOrigin, origins, 3);
+
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
+
 						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "THEME & OPACITY");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						ImGui::SliderFloat("Menu Opacity", &s_MenuAlpha, 0.50f, 1.00f, "%.2f");
+						ImGui::TextUnformatted("Menu Opacity");
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::SliderFloat("##MenuOpacity", &s_MenuAlpha, 0.50f, 1.00f, "%.2f");
 						ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = s_MenuAlpha;
+
 						ImGui::Spacing();
-						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 0.8f), "Theme: Cyberpunk Orange");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "FLOATING LAUNCHER");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::Text("Dimensions: 56 x 56 pt");
+						ImGui::Text("Border: Glowing #FF8A00");
+						ImGui::Text("Memory: Saved to device");
+						ImGui::Text("Gestures: Tap, Drag");
 					}
 					ImGui::EndChild();
 				}
