@@ -78,6 +78,178 @@ static ImVec4 s_CrosshairColor = ImVec4(1.0f, 0.54f, 0.0f, 0.9f);
 static float s_MenuAlpha = 0.95f;
 
 // =========================================================================
+// Vector Navigation Icons
+// High-DPI Resolution Independent Custom Rendered Icons
+// =========================================================================
+enum NavIcon {
+	NAV_ICON_AIM,
+	NAV_ICON_ESP,
+	NAV_ICON_MISC,
+	NAV_ICON_SETTING,
+	NAV_ICON_CLOSE
+};
+
+static void DrawNavIcon(NavIcon icon, ImVec2 center, ImU32 col)
+{
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	switch (icon) {
+		case NAV_ICON_AIM: {
+			// Sniper Crosshair Icon
+			drawList->AddCircle(center, 5.5f, col, 16, 1.2f);
+			drawList->AddCircleFilled(center, 1.5f, col);
+			// 4 Crosshair Tick Marks
+			drawList->AddLine(ImVec2(center.x, center.y - 7.5f), ImVec2(center.x, center.y - 3.8f), col, 1.2f);
+			drawList->AddLine(ImVec2(center.x, center.y + 3.8f), ImVec2(center.x, center.y + 7.5f), col, 1.2f);
+			drawList->AddLine(ImVec2(center.x - 7.5f, center.y), ImVec2(center.x - 3.8f, center.y), col, 1.2f);
+			drawList->AddLine(ImVec2(center.x + 3.8f, center.y), ImVec2(center.x + 7.5f, center.y), col, 1.2f);
+			break;
+		}
+		case NAV_ICON_ESP: {
+			// Eye Vision Icon (Bezier Curves)
+			ImVec2 left(center.x - 7.2f, center.y);
+			ImVec2 right(center.x + 7.2f, center.y);
+			ImVec2 topCtrl(center.x, center.y - 5.0f);
+			ImVec2 botCtrl(center.x, center.y + 5.0f);
+
+			drawList->AddBezierQuadratic(left, topCtrl, right, col, 1.3f);
+			drawList->AddBezierQuadratic(left, botCtrl, right, col, 1.3f);
+			// Iris & Specular Highlight
+			drawList->AddCircleFilled(center, 2.5f, col);
+			drawList->AddCircleFilled(ImVec2(center.x + 0.9f, center.y - 0.9f), 0.8f, IM_COL32(255, 255, 255, 240));
+			break;
+		}
+		case NAV_ICON_MISC: {
+			// Tuning Sliders / Faders Icon
+			float y1 = center.y - 4.5f;
+			float y2 = center.y;
+			float y3 = center.y + 4.5f;
+
+			drawList->AddLine(ImVec2(center.x - 6.5f, y1), ImVec2(center.x + 6.5f, y1), col, 1.2f);
+			drawList->AddCircleFilled(ImVec2(center.x - 2.0f, y1), 1.8f, col);
+
+			drawList->AddLine(ImVec2(center.x - 6.5f, y2), ImVec2(center.x + 6.5f, y2), col, 1.2f);
+			drawList->AddCircleFilled(ImVec2(center.x + 2.5f, y2), 1.8f, col);
+
+			drawList->AddLine(ImVec2(center.x - 6.5f, y3), ImVec2(center.x + 6.5f, y3), col, 1.2f);
+			drawList->AddCircleFilled(ImVec2(center.x - 3.5f, y3), 1.8f, col);
+			break;
+		}
+		case NAV_ICON_SETTING: {
+			// 6-Tooth Mechanical Gear Icon
+			drawList->AddCircle(center, 3.2f, col, 16, 1.3f);
+			const int teeth = 6;
+			for (int i = 0; i < teeth; i++) {
+				float a = (float)i * (2.0f * 3.14159265f / (float)teeth);
+				float cosA = cosf(a);
+				float sinA = sinf(a);
+				ImVec2 p1(center.x + cosA * 3.8f, center.y + sinA * 3.8f);
+				ImVec2 p2(center.x + cosA * 6.5f, center.y + sinA * 6.5f);
+				drawList->AddLine(p1, p2, col, 1.8f);
+			}
+			break;
+		}
+		case NAV_ICON_CLOSE: {
+			// Crisp Red Cross Mark
+			drawList->AddLine(ImVec2(center.x - 4.5f, center.y - 4.5f), ImVec2(center.x + 4.5f, center.y + 4.5f), col, 1.5f);
+			drawList->AddLine(ImVec2(center.x + 4.5f, center.y - 4.5f), ImVec2(center.x - 4.5f, center.y + 4.5f), col, 1.5f);
+			break;
+		}
+	}
+}
+
+// Custom Navigation Button with Left-Aligned Icon and Label
+static bool NavButton(const char* label, NavIcon icon, bool isSelected, float width = -1.0f, float height = 36.0f)
+{
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window->SkipItems)
+		return false;
+
+	ImGuiContext& g = *GImGui;
+	const ImGuiID id = window->GetID(label);
+
+	ImVec2 pos = window->DC.CursorPos;
+	float availW = ImGui::GetContentRegionAvail().x;
+	ImVec2 size(width > 0 ? width : availW, height);
+	const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+
+	ImGui::ItemSize(size, 0.0f);
+	if (!ImGui::ItemAdd(bb, id))
+		return false;
+
+	bool hovered, held;
+	bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+
+	ImU32 bg_col;
+	ImU32 text_col;
+	ImU32 icon_col;
+
+	if (isSelected) {
+		bg_col = IM_COL32(255, 138, 0, 240);    // Vibrant #FF8A00
+		text_col = IM_COL32(10, 10, 14, 255);    // Dark contrasting text
+		icon_col = IM_COL32(10, 10, 14, 255);    // Dark contrasting icon
+	} else if (hovered || held) {
+		bg_col = IM_COL32(36, 36, 48, 240);
+		text_col = IM_COL32(255, 255, 255, 255);
+		icon_col = IM_COL32(255, 179, 71, 240);  // Amber highlight
+	} else {
+		bg_col = IM_COL32(20, 20, 28, 220);      // Dark slate
+		text_col = IM_COL32(215, 215, 225, 240); // Soft white
+		icon_col = IM_COL32(255, 138, 0, 230);   // Primary Orange icon
+	}
+
+	ImDrawList* drawList = window->DrawList;
+	drawList->AddRectFilled(bb.Min, bb.Max, bg_col, 6.0f);
+	if (isSelected) {
+		drawList->AddRect(bb.Min, bb.Max, IM_COL32(255, 179, 71, 200), 6.0f, 0, 1.2f);
+	}
+
+	// Render vector icon on the left
+	ImVec2 iconCenter(bb.Min.x + 18.0f, bb.Min.y + height * 0.5f);
+	DrawNavIcon(icon, iconCenter, icon_col);
+
+	// Render text label next to the icon
+	ImVec2 textPos(bb.Min.x + 36.0f, bb.Min.y + (height - ImGui::GetFontSize()) * 0.5f);
+	drawList->AddText(textPos, text_col, label);
+
+	return pressed;
+}
+
+// Sub-Tab Button (AIMBOT / SILENT AIM)
+static bool SubTabButton(const char* label, NavIcon icon, bool isSelected, ImVec2 size)
+{
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window->SkipItems)
+		return false;
+
+	const ImGuiID id = window->GetID(label);
+	ImVec2 pos = window->DC.CursorPos;
+	const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+
+	ImGui::ItemSize(size, 0.0f);
+	if (!ImGui::ItemAdd(bb, id))
+		return false;
+
+	bool hovered, held;
+	bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+
+	ImU32 bg_col = isSelected ? IM_COL32(255, 138, 0, 230) : (hovered ? IM_COL32(36, 36, 48, 220) : IM_COL32(24, 24, 32, 220));
+	ImU32 text_col = isSelected ? IM_COL32(10, 10, 14, 255) : IM_COL32(220, 220, 230, 240);
+	ImU32 icon_col = isSelected ? IM_COL32(10, 10, 14, 255) : IM_COL32(255, 138, 0, 220);
+
+	ImDrawList* drawList = window->DrawList;
+	drawList->AddRectFilled(bb.Min, bb.Max, bg_col, 5.0f);
+
+	ImVec2 iconCenter(bb.Min.x + 16.0f, bb.Min.y + size.y * 0.5f);
+	DrawNavIcon(icon, iconCenter, icon_col);
+
+	ImVec2 textPos(bb.Min.x + 32.0f, bb.Min.y + (size.y - ImGui::GetFontSize()) * 0.5f);
+	drawList->AddText(textPos, text_col, label);
+
+	return pressed;
+}
+
+// =========================================================================
 // Touch-Through Filter View
 // Only intercepts touches that land directly inside active ImGui windows
 // =========================================================================
@@ -134,18 +306,15 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 	}
 
 	float t = *v ? 1.0f : 0.0f;
-	// #FF8A00 when ON, #242430 dark slate when OFF
 	ImU32 col_bg = *v ? IM_COL32(255, 138, 0, 245) : IM_COL32(36, 36, 48, 240);
 	draw_list->AddRectFilled(p, ImVec2(p.x + width, p.y + height), col_bg, radius);
 	
 	if (*v) {
-		// Amber subtle outer highlight
 		draw_list->AddRect(p, ImVec2(p.x + width, p.y + height), IM_COL32(255, 179, 71, 180), radius, 0, 1.0f);
 	} else {
 		draw_list->AddRect(p, ImVec2(p.x + width, p.y + height), IM_COL32(60, 60, 75, 180), radius, 0, 1.0f);
 	}
 
-	// Crisp white rounded thumb knob
 	draw_list->AddCircleFilled(ImVec2(p.x + radius + t * (width - 2.0f * radius), p.y + radius), radius - 2.5f, IM_COL32(255, 255, 255, 255));
 
 	ImGui::SameLine(0, 10.0f);
@@ -388,8 +557,8 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 		// Responsive layout sizing
 		float screenW = io.DisplaySize.x;
 		float screenH = io.DisplaySize.y;
-		float winW = 600.0f;
-		float winH = 340.0f;
+		float winW = 620.0f;
+		float winH = 345.0f;
 		if (winW > screenW - 20.0f) winW = screenW - 20.0f;
 		if (winH > screenH - 20.0f) winH = screenH - 20.0f;
 		float posX = (screenW - winW) * 0.5f;
@@ -419,15 +588,15 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 			// =================================================================
 			// LEFT VERTICAL SIDEBAR (#15151B)
-			// Navigation: AIM | ESP | MISC | SETTING
+			// Navigation: AIM (Crosshair) | ESP (Eye) | MISC (Sliders) | SETTING (Gear)
 			// =================================================================
-			float sidebarW = 125.0f;
+			float sidebarW = 135.0f;
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f));
 			ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0), true, ImGuiWindowFlags_NoScrollbar);
 			{
 				ImGui::Spacing();
 				
-				// Render the user's authentic OXSAK emblem badge instead of plain text!
+				// Render the authentic graphic OXSAK emblem badge at the top
 				if (s_LogoTexture) {
 					float logoSize = 64.0f;
 					float logoX = (sidebarW - logoSize) * 0.5f - 6.0f;
@@ -440,25 +609,30 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				ImGui::Separator();
 				ImGui::Spacing();
 
-				// Clean Navigation: AIM | ESP | MISC | SETTING
-				const char* tabNames[] = { "AIM", "ESP", "MISC", "SETTING" };
-				for (int i = 0; i < 4; i++)
-				{
-					bool isSelected = (s_SelectedTab == i);
-					if (isSelected) {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.90f));
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
-					} else {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.12f, 0.16f, 0.80f));
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
-					}
-
-					if (ImGui::Button(tabNames[i], ImVec2(-1, 34))) {
-						s_SelectedTab = i;
-					}
-					ImGui::PopStyleColor(2);
-					ImGui::Spacing();
+				// Clean Navigation with Dedicated Vector Icons:
+				// 1. Crosshair Icon before AIM
+				// 2. Eye Icon before ESP
+				// 3. Fader Sliders Icon before MISC
+				// 4. Mechanical Gear Icon before SETTING
+				if (NavButton("AIM", NAV_ICON_AIM, s_SelectedTab == 0)) {
+					s_SelectedTab = 0;
 				}
+				ImGui::Spacing();
+
+				if (NavButton("ESP", NAV_ICON_ESP, s_SelectedTab == 1)) {
+					s_SelectedTab = 1;
+				}
+				ImGui::Spacing();
+
+				if (NavButton("MISC", NAV_ICON_MISC, s_SelectedTab == 2)) {
+					s_SelectedTab = 2;
+				}
+				ImGui::Spacing();
+
+				if (NavButton("SETTING", NAV_ICON_SETTING, s_SelectedTab == 3)) {
+					s_SelectedTab = 3;
+				}
+				ImGui::Spacing();
 
 				// Push Close Button to Bottom
 				float availHeight = ImGui::GetContentRegionAvail().y;
@@ -466,11 +640,11 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 					ImGui::Dummy(ImVec2(0, availHeight - 38.0f));
 				}
 
-				// Clean Close button with subtle red glow
+				// Clean Close button with vector cross icon
 				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.15f, 0.15f, 0.25f));
 				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.25f, 0.25f, 0.80f));
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.40f, 0.40f, 1.0f));
-				if (ImGui::Button("Close Menu", ImVec2(-1, 32))) {
+				if (NavButton("Close Menu", NAV_ICON_CLOSE, false, -1.0f, 32.0f)) {
 					MenDeal = false;
 					[ImGuiDrawView showChange:NO];
 				}
@@ -489,31 +663,15 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				// Sub-Tabs when AIM is active (AIMBOT & SILENT AIM)
 				if (s_SelectedTab == 0)
 				{
-					if (s_AimbotSubTab == 0) {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.85f));
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
-					} else {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.20f, 0.80f));
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
-					}
-					if (ImGui::Button("AIMBOT", ImVec2(120, 28))) {
+					if (SubTabButton("AIMBOT", NAV_ICON_AIM, s_AimbotSubTab == 0, ImVec2(125, 30))) {
 						s_AimbotSubTab = 0;
 					}
-					ImGui::PopStyleColor(2);
 
 					ImGui::SameLine();
 
-					if (s_AimbotSubTab == 1) {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.85f));
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
-					} else {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.20f, 0.80f));
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
-					}
-					if (ImGui::Button("SILENT AIM", ImVec2(120, 28))) {
+					if (SubTabButton("SILENT AIM", NAV_ICON_AIM, s_AimbotSubTab == 1, ImVec2(135, 30))) {
 						s_AimbotSubTab = 1;
 					}
-					ImGui::PopStyleColor(2);
 
 					ImGui::Separator();
 				}
