@@ -129,7 +129,28 @@ jobs:
           DYLIB="${{ env.DYLIB_PATH }}"
           mkdir -p output
           
-          # Check if an authorized base IPA was provided in repository
+          # 1. Compile Full Standalone 3D SceneKit + ImGui Application (ESP_3D_Demo.ipa)
+          echo "=== Compiling Full 3D Standalone SceneKit + ImGui Demo App ==="
+          mkdir -p Payload/ESP3DDemo.app
+          xcrun -sdk iphoneos clang++ -arch arm64 -std=c++17 -fobjc-arc -mios-version-min=15.0 \
+            -I. -I./IMGUI \
+            StandaloneDemo/main.m \
+            StandaloneDemo/SceneViewController.mm \
+            IMGUI/imgui.cpp \
+            IMGUI/imgui_draw.cpp \
+            IMGUI/imgui_widgets.cpp \
+            IMGUI/imgui_tables.cpp \
+            IMGUI/imgui_impl_metal.mm \
+            -framework UIKit -framework Foundation -framework SceneKit -framework Metal -framework MetalKit -framework QuartzCore \
+            -o Payload/ESP3DDemo.app/ESP3DDemo
+
+          cp StandaloneDemo/Info.plist Payload/ESP3DDemo.app/Info.plist
+          cp StandaloneDemo/AppIcon*.png Payload/ESP3DDemo.app/ 2>/dev/null || true
+          ldid -S Payload/ESP3DDemo.app/ESP3DDemo
+          zip -r output/ESP_3D_Demo.ipa Payload
+          rm -rf Payload
+
+          # 2. Check if an authorized base IPA was provided in repository
           BASE_IPA=$(find . -name "*.ipa" -maxdepth 2 | head -n 1)
           
           if [ -n "$BASE_IPA" ] && [ -f "$BASE_IPA" ]; then
