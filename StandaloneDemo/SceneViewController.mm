@@ -456,7 +456,7 @@ struct DummyTarget {
     _floatingButton = [[FloatingOXSAKButton alloc] initWithFrame:frame];
     _floatingButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin;
     
-    __weak typeof(self) weakSelf = self;
+    __weak SceneViewController *weakSelf = self;
     _floatingButton.onTap = ^{
         [weakSelf toggleMenu];
     };
