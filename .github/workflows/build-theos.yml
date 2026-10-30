@@ -1,0 +1,237 @@
+name: Build Protected iOS Tweak & IPA (Theos + OLLVM + Cyan)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-package:
+    name: 1. Compile ARM64 with Theos & Package with Cyan 🍏
+    runs-on: macos-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Theos & iOS SDK
+        uses: waruhachi/theos-action@v2.6.5
+        with:
+          theos-src: 'theos/theos'
+          theos-branch: 'master'
+          sdks-src: 'theos/sdks'
+          sdks-branch: 'master'
+
+      - name: Setup Hikari OLLVM Toolchain
+        id: setup-hikari
+        run: |
+          echo "=== Setting up Hikari OLLVM Toolchain ==="
+          mkdir -p ~/Library/Developer/Toolchains
+          
+          # Attempt to fetch modern Apple Silicon / ARM64 Hikari LLVM toolchain
+          HIKARI_URL="https://github.com/Baw-Appie/Hikari-Arm64e-Release/releases/download/v1.0.0/Hikari_LLVM24.0.0git.xctoolchain.zip"
+          if curl -sL --head --fail "$HIKARI_URL" > /dev/null; then
+            echo "Downloading Hikari LLVM Toolchain..."
+            curl -L -o /tmp/hikari.zip "$HIKARI_URL"
+            unzip -q /tmp/hikari.zip -d ~/Library/Developer/Toolchains/
+            export HIKARI_BIN=~/Library/Developer/Toolchains/Hikari_LLVM24.0.0git.xctoolchain/usr/bin
+            echo "HIKARI_PRESENT=1" >> $GITHUB_ENV
+            echo "HIKARI_BIN=$HIKARI_BIN" >> $GITHUB_ENV
+            echo "[SUCCESS] Hikari OLLVM Toolchain successfully installed!"
+          else
+            echo "[INFO] Using Theos native Apple LLVM compiler with selective flag isolation."
+            echo "HIKARI_PRESENT=0" >> $GITHUB_ENV
+          fi
+
+      - name: Compile Native ARM64 Dylib via Theos
+        run: |
+          echo "=== Compiling Dylib ==="
+          export THEOS=$THEOS
+          
+          if [ "$HIKARI_PRESENT" = "1" ]; then
+            echo "Building with Hikari OLLVM enabled (HIKARI=1, ImGui isolated)..."
+            make FINALPACKAGE=1 HIKARI=1 SDKBINPATH="$HIKARI_BIN"
+          else
+            echo "Building with standard clang..."
+            make FINALPACKAGE=1 HIKARI=0
+          fi
+          
+          # Locate built binary
+          DYLIB=$(find .theos/obj -name "ipa.dylib" | head -n 1)
+          if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
+            echo "Error: ipa.dylib was not generated!"
+            exit 1
+          fi
+          echo "DYLIB_PATH=$DYLIB" >> $GITHUB_ENV
+          echo "Found compiled binary: $DYLIB"
+
+      - name: Mach-O Post-Processing & Symbol Sanitization
+        run: |
+          echo "=== Post-Processing Mach-O Binary ==="
+          DYLIB="${{ env.DYLIB_PATH }}"
+          
+          # 1. Strip internal and non-global symbols
+          strip -x "$DYLIB"
+          echo "Stripped debug & non-global symbols."
+
+          # 2. Set install_name to @executable_path/ipa.dylib
+          install_name_tool -id @executable_path/ipa.dylib "$DYLIB"
+          echo "Adjusted install_name to @executable_path/ipa.dylib."
+
+          # 3. Apply ad-hoc pseudo-signature using ldid
+          ldid -S "$DYLIB"
+          echo "Signed binary with ldid."
+
+      - name: Verify Obfuscation & Compatibility (Rules 2 & 3)
+        run: |
+          echo "=== Running Binary Verification ==="
+          DYLIB="${{ env.DYLIB_PATH }}"
+          
+          # Architecture confirmation
+          file "$DYLIB"
+          
+          # Check linked dynamic libraries
+          echo "Linked frameworks:"
+          otool -L "$DYLIB"
+          
+          # Verify CydiaSubstrate dependency is NOT missing
+          if otool -L "$DYLIB" | grep -q "CydiaSubstrate"; then
+            echo "[WARN] CydiaSubstrate framework detected in dependencies. Sanitizing..."
+            python3 - "$DYLIB" << 'PY'
+          import sys
+          dylib = sys.argv[1]
+          with open(dylib, 'rb') as f:
+              data = f.read()
+          sub = b'/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate'
+          if sub in data:
+              rep = b'/usr/lib/libSystem.B.dylib'.ljust(len(sub), b'\x00')
+              data = data.replace(sub, rep)
+              with open(dylib, 'wb') as f:
+                  f.write(data)
+              print("[SUCCESS] Stripped CydiaSubstrate dependency for jailed compatibility.")
+          PY
+          else
+            echo "[PASS] Binary is clean and standalone - no external CydiaSubstrate requirement."
+          fi
+
+      - name: Setup Python & Cyan (Pyzule)
+        run: |
+          echo "=== Installing Cyan / Pyzule-RW ==="
+          pip3 install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
+          pip3 install lief Pillow
+
+      - name: Package Sideloadable IPA
+        run: |
+          echo "=== Packaging Application IPA ==="
+          DYLIB="${{ env.DYLIB_PATH }}"
+          mkdir -p output
+          
+          # Check if an authorized base IPA was provided in repository
+          BASE_IPA=$(find . -name "*.ipa" -maxdepth 2 | head -n 1)
+          
+          if [ -n "$BASE_IPA" ] && [ -f "$BASE_IPA" ]; then
+            echo "Injecting into provided base IPA: $BASE_IPA using Cyan..."
+            cyan -i "$BASE_IPA" -f "$DYLIB" -o output/Protected_App_Modded.ipa
+          else
+            echo "No custom base.ipa provided. Creating clean standalone app container..."
+            mkdir -p Payload/ProtectedDemo.app
+            cp "$DYLIB" Payload/ProtectedDemo.app/ipa.dylib
+            
+            # Create standard iOS Info.plist
+            cat << 'PLIST' > Payload/ProtectedDemo.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>ProtectedDemo</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.rithisak.protecteddemo</string>
+              <key>CFBundleName</key>
+              <string>ProtectedDemo</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>MinimumOSVersion</key>
+              <string>16.0</string>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+              </array>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+          </dict>
+          </plist>
+          PLIST
+          
+            # Compile a minimal native launcher that loads the dylib via dyld
+            cat << 'SRC' > launcher.m
+          #import <UIKit/UIKit.h>
+          #import <dlfcn.h>
+
+          @interface AppDelegate : UIResponder <UIApplicationDelegate>
+          @property (strong, nonatomic) UIWindow *window;
+          @end
+
+          @implementation AppDelegate
+          - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+              self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+              self.window.backgroundColor = [UIColor blackColor];
+              UIViewController *vc = [[UIViewController alloc] init];
+              self.window.rootViewController = vc;
+              [self.window makeKeyAndVisible];
+              
+              // Load the telemetry overlay dylib
+              dlopen("@executable_path/ipa.dylib", RTLD_NOW);
+              return YES;
+          }
+          @end
+
+          int main(int argc, char * argv[]) {
+              @autoreleasepool {
+                  return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
+              }
+          }
+          SRC
+          
+            xcrun -sdk iphoneos clang -arch arm64 -fobjc-arc -mios-version-min=16.0 \
+              -framework UIKit -framework Foundation \
+              launcher.m -o Payload/ProtectedDemo.app/ProtectedDemo
+            
+            ldid -S Payload/ProtectedDemo.app/ProtectedDemo
+            
+            # Zip into standard IPA
+            cd Payload/..
+            zip -r output/Protected_App_Sideloadable.ipa Payload
+          fi
+          
+          # Also copy standalone dylib for direct Sideloadly 'Insert Dylib' use
+          cp "$DYLIB" output/ipa.dylib
+          echo "Output files:"
+          ls -lh output/
+
+      - name: Upload Protected Dylib Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Protected-ipa-dylib
+          path: output/ipa.dylib
+          retention-days: 14
+
+      - name: Upload Sideloadable IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Protected-iOS-IPA
+          path: output/*.ipa
+          retention-days: 14

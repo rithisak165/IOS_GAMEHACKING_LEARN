@@ -1,0 +1,15 @@
+# Theos build directories
+.theos/
+packages/
+build/
+
+# Binary artifacts
+*.dylib
+*.deb
+*.ipa
+*.o
+*.dSYM/
+
+# OS metadata
+.DS_Store
+Thumbs.db

@@ -1,0 +1,7 @@
+Package: brutaltrip.deb
+Name: BRUTALTRIP
+Version: 2.51
+Architecture: iphoneos-arm64
+Description: killall
+Author: t.me/brutaltrip
+Maintainer: GO_EASY_ON_ME
