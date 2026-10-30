@@ -141,7 +141,7 @@ jobs:
             IMGUI/imgui_widgets.cpp \
             IMGUI/imgui_tables.cpp \
             IMGUI/imgui_impl_metal.mm \
-            -framework UIKit -framework Foundation -framework SceneKit -framework Metal -framework MetalKit -framework QuartzCore \
+            -framework UIKit -framework Foundation -framework SceneKit -framework Metal -framework MetalKit -framework QuartzCore -framework CoreGraphics \
             -o Payload/ESP3DDemo.app/ESP3DDemo
 
           cp StandaloneDemo/Info.plist Payload/ESP3DDemo.app/Info.plist

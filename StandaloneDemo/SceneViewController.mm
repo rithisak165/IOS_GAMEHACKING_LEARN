@@ -95,7 +95,7 @@ struct DummyTarget {
         self.layer.shadowColor = [UIColor colorWithRed:0.0 green:0.85 blue:1.0 alpha:0.6].CGColor;
         self.layer.shadowRadius = 8.0;
         self.layer.shadowOpacity = 0.8;
-        self.layer.shadowOffset = CGSizeZero;
+        self.layer.shadowOffset = CGSizeMake(0, 0);
         
         [self setTitle:@"ESP" forState:UIControlStateNormal];
         [self setTitleColor:[UIColor colorWithRed:0.0 green:0.95 blue:1.0 alpha:1.0] forState:UIControlStateNormal];
