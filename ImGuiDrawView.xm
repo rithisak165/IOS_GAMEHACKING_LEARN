@@ -33,24 +33,28 @@
 #include <unistd.h>
 #import "Helper/Functions/UniversalESP.h"
 #include "fonts.h"
+#import "Esp/oxsak_badge_data.h"
 
 #define kWidth [UIScreen mainScreen].bounds.size.width
 #define kHeight [UIScreen mainScreen].bounds.size.height
 #define kScale [UIScreen mainScreen].scale
 
 static bool MenDeal = true;
+static id<MTLTexture> s_LogoTexture = nil;
 
 // =========================================================================
-// OXSAK Visual State & Navigation (Isolated from Game Memory)
+// Navigation & State Management
+// Sidebar: 0 = AIM, 1 = ESP, 2 = MISC, 3 = SETTING
 // =========================================================================
-static int s_SelectedTab = 0;       // 0: AIMBOT, 1: SILENT AIM, 2: ESP, 3: MISC, 4: SETTINGS
-static int s_AimbotSubTab = 0;      // 0: Aimbot, 1: Silent Aim
+static int s_SelectedTab = 0;       // 0: AIM, 1: ESP, 2: MISC, 3: SETTING
+static int s_AimbotSubTab = 0;      // 0: AIMBOT, 1: SILENT AIM
 
 // Simulated Aimbot Telemetry Settings
 static bool s_AimEnable = false;
 static bool s_AimVisibleOnly = true;
 static bool s_AimIgnoreTeam = true;
 static bool s_AimSticky = false;
+static bool s_AimDrawFOV = true;
 static float s_AimFOV = 70.0f;
 static float s_AimSmoothness = 10.0f;
 static float s_AimMaxTurn = 45.0f;
@@ -61,24 +65,16 @@ static float s_AimJitter = 0.07f;
 static bool s_SilentEnable = false;
 static bool s_SilentAutoFire = false;
 static bool s_SilentHitchanceCheck = true;
+static bool s_SilentIgnoreSleepers = true;
 static float s_SilentFOV = 40.0f;
 static float s_SilentHitchance = 85.0f;
-static int s_SilentBone = 0; // 0: Head, 1: Chest
-
-// Visual ESP Configuration
-static bool s_ESPEnable = false;
-static bool s_ESPBox = true;
-static bool s_ESPLine = false;
-static bool s_ESPSkeleton = true;
-static bool s_ESPDistance = true;
-static bool s_ESPHealth = true;
-static float s_HeadOffset = 1.80f;
-static float s_FeetOffset = 0.10f;
-static float s_WidthScale = 0.60f;
+static int s_SilentBone = 0; // 0: Head, 1: Neck, 2: Chest, 3: Pelvis
 
 // Misc & System Diagnostics
 static bool s_ShowWatermark = true;
 static bool s_ShowCrosshair = false;
+static float s_CrosshairSize = 10.0f;
+static ImVec4 s_CrosshairColor = ImVec4(1.0f, 0.54f, 0.0f, 0.9f);
 static float s_MenuAlpha = 0.95f;
 
 // =========================================================================
@@ -122,7 +118,7 @@ static float s_MenuAlpha = 0.95f;
 @end
 
 // =========================================================================
-// Custom iOS Toggle Switch Widget (#FF8A00 Active Orange)
+// Clean Modern iOS Toggle Switch Widget (#FF8A00 Active Orange)
 // =========================================================================
 static bool OXSAK_Toggle(const char* label, bool* v)
 {
@@ -138,8 +134,8 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 	}
 
 	float t = *v ? 1.0f : 0.0f;
-	// #FF8A00 when ON, #20202B dark when OFF
-	ImU32 col_bg = *v ? IM_COL32(255, 138, 0, 240) : IM_COL32(36, 36, 48, 240);
+	// #FF8A00 when ON, #242430 dark slate when OFF
+	ImU32 col_bg = *v ? IM_COL32(255, 138, 0, 245) : IM_COL32(36, 36, 48, 240);
 	draw_list->AddRectFilled(p, ImVec2(p.x + width, p.y + height), col_bg, radius);
 	
 	if (*v) {
@@ -149,7 +145,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 		draw_list->AddRect(p, ImVec2(p.x + width, p.y + height), IM_COL32(60, 60, 75, 180), radius, 0, 1.0f);
 	}
 
-	// White knob
+	// Crisp white rounded thumb knob
 	draw_list->AddCircleFilled(ImVec2(p.x + radius + t * (width - 2.0f * radius), p.y + radius), radius - 2.5f, IM_COL32(255, 255, 255, 255));
 
 	ImGui::SameLine(0, 10.0f);
@@ -163,6 +159,53 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 @end
 
 @implementation ImGuiDrawView
+
++ (id<MTLTexture>)createTextureFromImage:(UIImage *)image device:(id<MTLDevice>)device
+{
+	if (!image || !device) return nil;
+	CGImageRef imageRef = image.CGImage;
+	if (!imageRef) return nil;
+
+	NSUInteger width = CGImageGetWidth(imageRef);
+	NSUInteger height = CGImageGetHeight(imageRef);
+
+	MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+																					 width:width
+																					height:height
+																				 mipmapped:NO];
+	desc.usage = MTLTextureUsageShaderRead;
+	id<MTLTexture> texture = [device newTextureWithDescriptor:desc];
+	if (!texture) return nil;
+
+	CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+	NSUInteger bytesPerPixel = 4;
+	NSUInteger bytesPerRow = bytesPerPixel * width;
+	NSUInteger bitsPerComponent = 8;
+
+	void *rawData = calloc(height, bytesPerRow);
+	if (!rawData) {
+		CGColorSpaceRelease(colorSpace);
+		return nil;
+	}
+
+	CGContextRef context = CGBitmapContextCreate(rawData, width, height,
+												 bitsPerComponent, bytesPerRow, colorSpace,
+												 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+	CGColorSpaceRelease(colorSpace);
+
+	if (context) {
+		CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+		CGContextRelease(context);
+
+		[texture replaceRegion:MTLRegionMake2D(0, 0, width, height)
+				   mipmapLevel:0
+					 withBytes:rawData
+				   bytesPerRow:bytesPerRow];
+	}
+
+	free(rawData);
+	return texture;
+}
 
 - (instancetype)initWithNibName:(nullable NSString *)nibNameOrNil bundle:(nullable NSBundle *)nibBundleOrNil
 {
@@ -180,7 +223,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 	(void)io;
 
 	// =========================================================================
-	// OXSAK Cyberpunk Orange & Charcoal Design System
+	// OXSAK Cyberpunk Orange & Charcoal Theme
 	// =========================================================================
 	ImGuiStyle &style = ImGui::GetStyle();
 	style.WindowRounding = 10.0f;
@@ -227,6 +270,16 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 	// Load Roboto Condensed embedded font directly from memory
 	io.Fonts->AddFontFromMemoryTTF(roboto_regular, sizeof(roboto_regular), 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+
+	// Load the OXSAK logo emblem into a Metal texture for ImGui rendering
+	NSData *imageData = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:g_OXSAKBadgeBase64]
+															options:NSDataBase64DecodingIgnoreUnknownCharacters];
+	if (imageData) {
+		UIImage *logoImg = [UIImage imageWithData:imageData];
+		if (logoImg) {
+			s_LogoTexture = [ImGuiDrawView createTextureFromImage:logoImg device:_device];
+		}
+	}
 
 	ImGui_ImplMetal_Init(_device);
 
@@ -345,13 +398,13 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 		// Subtle watermark when menu is closed
 		if (!MenDeal && s_ShowWatermark)
 		{
-			ImGui::SetNextWindowPos(ImVec2(screenW - 160.0f, 16.0f), ImGuiCond_Always);
-			ImGui::SetNextWindowSize(ImVec2(145.0f, 32.0f), ImGuiCond_Always);
+			ImGui::SetNextWindowPos(ImVec2(screenW - 140.0f, 16.0f), ImGuiCond_Always);
+			ImGui::SetNextWindowSize(ImVec2(125.0f, 28.0f), ImGuiCond_Always);
 			ImGuiWindowFlags wmFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
 			if (ImGui::Begin("##Watermark", nullptr, wmFlags)) {
-				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 0.85f), "[OXSAK]");
+				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 0.85f), "OXSAK");
 				ImGui::SameLine();
-				ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 0.7f), "Polyfield");
+				ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 0.6f), "Polyfield");
 			}
 			ImGui::End();
 		}
@@ -366,19 +419,30 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 			// =================================================================
 			// LEFT VERTICAL SIDEBAR (#15151B)
+			// Navigation: AIM | ESP | MISC | SETTING
 			// =================================================================
 			float sidebarW = 125.0f;
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f));
 			ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0), true, ImGuiWindowFlags_NoScrollbar);
 			{
 				ImGui::Spacing();
-				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), " OXSAK");
-				ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.7f, 0.8f), " POLYFIELD");
+				
+				// Render the user's authentic OXSAK emblem badge instead of plain text!
+				if (s_LogoTexture) {
+					float logoSize = 64.0f;
+					float logoX = (sidebarW - logoSize) * 0.5f - 6.0f;
+					if (logoX < 4.0f) logoX = 4.0f;
+					ImGui::SetCursorPosX(logoX);
+					ImGui::Image((__bridge void *)s_LogoTexture, ImVec2(logoSize, logoSize));
+				}
+				
+				ImGui::Spacing();
 				ImGui::Separator();
 				ImGui::Spacing();
 
-				const char* tabNames[] = { "AIMBOT", "SILENT AIM", "ESP", "MISC", "SETTINGS" };
-				for (int i = 0; i < 5; i++)
+				// Clean Navigation: AIM | ESP | MISC | SETTING
+				const char* tabNames[] = { "AIM", "ESP", "MISC", "SETTING" };
+				for (int i = 0; i < 4; i++)
 				{
 					bool isSelected = (s_SelectedTab == i);
 					if (isSelected) {
@@ -389,7 +453,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
 					}
 
-					if (ImGui::Button(tabNames[i], ImVec2(-1, 32))) {
+					if (ImGui::Button(tabNames[i], ImVec2(-1, 34))) {
 						s_SelectedTab = i;
 					}
 					ImGui::PopStyleColor(2);
@@ -402,7 +466,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 					ImGui::Dummy(ImVec2(0, availHeight - 38.0f));
 				}
 
-				// Red styled Close button
+				// Clean Close button with subtle red glow
 				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.15f, 0.15f, 0.25f));
 				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.25f, 0.25f, 0.80f));
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.40f, 0.40f, 1.0f));
@@ -422,17 +486,17 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 			// =================================================================
 			ImGui::BeginChild("ContentArea", ImVec2(0, 0), false);
 			{
-				// Top Horizontal Sub-Tabs (when AIMBOT is active)
+				// Sub-Tabs when AIM is active (AIMBOT & SILENT AIM)
 				if (s_SelectedTab == 0)
 				{
 					if (s_AimbotSubTab == 0) {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.85f));
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
 					} else {
 						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.20f, 0.80f));
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
 					}
-					if (ImGui::Button("Aimbot Telemetry", ImVec2(140, 28))) {
+					if (ImGui::Button("AIMBOT", ImVec2(120, 28))) {
 						s_AimbotSubTab = 0;
 					}
 					ImGui::PopStyleColor(2);
@@ -440,13 +504,13 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 					ImGui::SameLine();
 
 					if (s_AimbotSubTab == 1) {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.85f));
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
 					} else {
 						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.20f, 0.80f));
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
 					}
-					if (ImGui::Button("Silent Aim Telemetry", ImVec2(150, 28))) {
+					if (ImGui::Button("SILENT AIM", ImVec2(120, 28))) {
 						s_AimbotSubTab = 1;
 					}
 					ImGui::PopStyleColor(2);
@@ -458,47 +522,49 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				float colW = (ImGui::GetContentRegionAvail().x - 12.0f) * 0.5f;
 
 				// -------------------------------------------------------------
-				// TAB 0: AIMBOT
+				// TAB 0: AIM (AIMBOT & SILENT AIM SUB-TABS)
 				// -------------------------------------------------------------
 				if (s_SelectedTab == 0)
 				{
 					if (s_AimbotSubTab == 0)
 					{
-						// Column 1: Toggles
+						// Column 1: Aimbot Toggles
 						ImGui::BeginChild("AimToggles", ImVec2(colW, 0), true);
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] AIMBOT CONTROLS");
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "AIMBOT CONFIGURATION");
 							ImGui::Separator();
 							ImGui::Spacing();
 
 							OXSAK_Toggle("Enable Aim", &s_AimEnable);
 							ImGui::Spacing();
-							OXSAK_Toggle("Visible Only", &s_AimVisibleOnly);
+							OXSAK_Toggle("Visible Only Check", &s_AimVisibleOnly);
 							ImGui::Spacing();
-							OXSAK_Toggle("Ignore Team", &s_AimIgnoreTeam);
+							OXSAK_Toggle("Ignore Teammates", &s_AimIgnoreTeam);
 							ImGui::Spacing();
-							OXSAK_Toggle("Sticky Lock", &s_AimSticky);
+							OXSAK_Toggle("Sticky Lock Target", &s_AimSticky);
+							ImGui::Spacing();
+							OXSAK_Toggle("Draw FOV Circle", &s_AimDrawFOV);
 						}
 						ImGui::EndChild();
 
 						ImGui::SameLine();
 
-						// Column 2: Sliders
+						// Column 2: Aimbot Sliders
 						ImGui::BeginChild("AimSliders", ImVec2(colW, 0), true);
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] TUNING & CALIBRATION");
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "TUNING & SMOOTHING");
 							ImGui::Separator();
 							ImGui::Spacing();
 
-							ImGui::SliderFloat("FOV", &s_AimFOV, 10.0f, 180.0f, "%.0f deg");
+							ImGui::SliderFloat("FOV Radius", &s_AimFOV, 10.0f, 180.0f, "%.0f deg");
 							ImGui::Spacing();
 							ImGui::SliderFloat("Smoothness", &s_AimSmoothness, 1.0f, 30.0f, "%.1f");
 							ImGui::Spacing();
-							ImGui::SliderFloat("Max Turn", &s_AimMaxTurn, 0.0f, 100.0f, "%.1f");
+							ImGui::SliderFloat("Max Turn Rate", &s_AimMaxTurn, 0.0f, 100.0f, "%.1f");
 							ImGui::Spacing();
-							ImGui::SliderFloat("Reaction", &s_AimReaction, 0.0f, 100.0f, "%.0f ms");
+							ImGui::SliderFloat("Reaction Delay", &s_AimReaction, 0.0f, 100.0f, "%.0f ms");
 							ImGui::Spacing();
-							ImGui::SliderFloat("Jitter", &s_AimJitter, 0.0f, 0.30f, "%.2f");
+							ImGui::SliderFloat("Jitter Offset", &s_AimJitter, 0.0f, 0.30f, "%.2f");
 						}
 						ImGui::EndChild();
 					}
@@ -507,15 +573,17 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 						// Column 1: Silent Aim Toggles
 						ImGui::BeginChild("SilentToggles", ImVec2(colW, 0), true);
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT AIM CONTROLS");
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "SILENT AIM CONTROLS");
 							ImGui::Separator();
 							ImGui::Spacing();
 
 							OXSAK_Toggle("Enable Silent Aim", &s_SilentEnable);
 							ImGui::Spacing();
-							OXSAK_Toggle("Auto Fire", &s_SilentAutoFire);
+							OXSAK_Toggle("Auto Fire on Target", &s_SilentAutoFire);
 							ImGui::Spacing();
 							OXSAK_Toggle("Hitchance Filter", &s_SilentHitchanceCheck);
+							ImGui::Spacing();
+							OXSAK_Toggle("Ignore Dormant Players", &s_SilentIgnoreSleepers);
 						}
 						ImGui::EndChild();
 
@@ -524,115 +592,100 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 						// Column 2: Silent Aim Sliders
 						ImGui::BeginChild("SilentSliders", ImVec2(colW, 0), true);
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT TUNING");
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "TARGETING & HITCHANCE");
 							ImGui::Separator();
 							ImGui::Spacing();
 
 							ImGui::SliderFloat("Silent FOV", &s_SilentFOV, 5.0f, 90.0f, "%.0f deg");
 							ImGui::Spacing();
-							ImGui::SliderFloat("Hitchance", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
+							ImGui::SliderFloat("Hitchance %", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
 							ImGui::Spacing();
-							const char* bones[] = { "Head", "Chest", "Pelvis" };
-							ImGui::Combo("Target Bone", &s_SilentBone, bones, 3);
+							const char* bones[] = { "Head", "Neck", "Chest", "Pelvis" };
+							ImGui::Combo("Target Bone", &s_SilentBone, bones, 4);
 						}
 						ImGui::EndChild();
 					}
 				}
 				// -------------------------------------------------------------
-				// TAB 1: SILENT AIM DIRECT TAB
+				// TAB 1: ESP (PRO COLORS & THIN OUTLINES)
 				// -------------------------------------------------------------
 				else if (s_SelectedTab == 1)
 				{
-					ImGui::BeginChild("SilentCol1", ImVec2(colW, 0), true);
+					// Column 1: Visual Elements
+					ImGui::BeginChild("ESPToggles", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT AIM CONTROLS");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "ESP VISUAL ELEMENTS");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						OXSAK_Toggle("Enable Silent Aim", &s_SilentEnable);
+						OXSAK_Toggle("Enable ESP Overlay", &g_ESP.bEnable);
 						ImGui::Spacing();
-						OXSAK_Toggle("Auto Fire", &s_SilentAutoFire);
+						OXSAK_Toggle("2D Bounding Box", &g_ESP.bBox);
 						ImGui::Spacing();
-						OXSAK_Toggle("Hitchance Filter", &s_SilentHitchanceCheck);
+						OXSAK_Toggle("Corner Box Style", &g_ESP.bCornerBox);
+						ImGui::Spacing();
+						OXSAK_Toggle("Snaplines", &g_ESP.bLine);
+						ImGui::Spacing();
+						OXSAK_Toggle("Skeleton / Bones", &g_ESP.bSkeleton);
+						ImGui::Spacing();
+						OXSAK_Toggle("Distance Indicator", &g_ESP.bDistance);
+						ImGui::Spacing();
+						OXSAK_Toggle("Player Health Bar", &g_ESP.bHealth);
+						ImGui::Spacing();
+
+						const char* origins[] = { "Bottom Screen", "Crosshair (Center)", "Top Screen" };
+						ImGui::Combo("Snapline Origin", &g_ESP.lineOrigin, origins, 3);
 					}
 					ImGui::EndChild();
 
 					ImGui::SameLine();
 
-					ImGui::BeginChild("SilentCol2", ImVec2(colW, 0), true);
+					// Column 2: Colors & Thin Outlines
+					ImGui::BeginChild("ESPSliders", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT TUNING");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "COLORS & THIN OUTLINES");
 						ImGui::Separator();
 						ImGui::Spacing();
 
-						ImGui::SliderFloat("Silent FOV", &s_SilentFOV, 5.0f, 90.0f, "%.0f deg");
+						// Color Customization with Popups
+						ImGui::ColorEdit4("Box Color", (float*)&g_ESP.boxColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 						ImGui::Spacing();
-						ImGui::SliderFloat("Hitchance", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
+						ImGui::ColorEdit4("Snapline Color", (float*)&g_ESP.lineColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 						ImGui::Spacing();
-						const char* bones[] = { "Head", "Chest", "Pelvis" };
-						ImGui::Combo("Target Bone", &s_SilentBone, bones, 3);
+						ImGui::ColorEdit4("Skeleton Color", (float*)&g_ESP.skeletonColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						// Thin Outlines Customization
+						ImGui::SliderFloat("Snapline Thinness", &g_ESP.lineThickness, 0.5f, 3.0f, "%.1f px");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Box Outline Thinness", &g_ESP.boxThickness, 0.5f, 3.0f, "%.1f px");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Skeleton Thinness", &g_ESP.skeletonThickness, 0.5f, 3.0f, "%.1f px");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Head Offset", &g_ESP.topPosFloat, 0.5f, 3.5f, "%.2f m");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Box Width Scale", &g_ESP.widthScale, 0.2f, 1.5f, "%.2f");
 					}
 					ImGui::EndChild();
 				}
 				// -------------------------------------------------------------
-				// TAB 2: ESP
+				// TAB 2: MISC
 				// -------------------------------------------------------------
 				else if (s_SelectedTab == 2)
 				{
-					ImGui::BeginChild("ESPToggles", ImVec2(colW, 0), true);
-					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] ESP DISPLAY ELEMENTS");
-						ImGui::Separator();
-						ImGui::Spacing();
-
-						OXSAK_Toggle("Enable ESP Overlay", &s_ESPEnable);
-						ImGui::Spacing();
-						OXSAK_Toggle("2D Box ESP", &s_ESPBox);
-						ImGui::Spacing();
-						OXSAK_Toggle("Snaplines", &s_ESPLine);
-						ImGui::Spacing();
-						OXSAK_Toggle("Skeleton / Bones", &s_ESPSkeleton);
-						ImGui::Spacing();
-						OXSAK_Toggle("Distance Indicator", &s_ESPDistance);
-						ImGui::Spacing();
-						OXSAK_Toggle("Health Bar", &s_ESPHealth);
-					}
-					ImGui::EndChild();
-
-					ImGui::SameLine();
-
-					ImGui::BeginChild("ESPSliders", ImVec2(colW, 0), true);
-					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] ESP CALIBRATION");
-						ImGui::Separator();
-						ImGui::Spacing();
-
-						ImGui::SliderFloat("Head Offset", &s_HeadOffset, 0.5f, 3.5f, "%.2f m");
-						ImGui::Spacing();
-						ImGui::SliderFloat("Feet Offset", &s_FeetOffset, -1.0f, 1.0f, "%.2f m");
-						ImGui::Spacing();
-						ImGui::SliderFloat("Box Width Scale", &s_WidthScale, 0.2f, 1.5f, "%.2f");
-						ImGui::Spacing();
-						ImGui::Separator();
-						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 1.0f), "ESP Visual Mode: Simulated");
-					}
-					ImGui::EndChild();
-				}
-				// -------------------------------------------------------------
-				// TAB 3: MISC
-				// -------------------------------------------------------------
-				else if (s_SelectedTab == 3)
-				{
 					ImGui::BeginChild("MiscCol1", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] ENGINE METRICS");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "MATCH & ENGINE METRICS");
 						ImGui::Separator();
 						ImGui::Spacing();
 
 						ImGui::Text("Screen Resolution: %.0f x %.0f", io.DisplaySize.x, io.DisplaySize.y);
 						ImGui::Text("Framerate: %.1f FPS", io.Framerate);
-						ImGui::Text("Interface Mode: Polyfield Injected MTKView");
-						ImGui::Text("Touch Filter: Selective pointInside");
+						ImGui::Text("Render Backend: Apple MetalKit");
+						ImGui::Text("Selective Touch Filter: Active");
+						ImGui::Text("Game Surface: Polyfield");
 					}
 					ImGui::EndChild();
 
@@ -640,31 +693,37 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 					ImGui::BeginChild("MiscCol2", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] VISUAL OVERLAYS");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "HUD UTILITIES");
 						ImGui::Separator();
 						ImGui::Spacing();
 
 						OXSAK_Toggle("Show Top Watermark", &s_ShowWatermark);
 						ImGui::Spacing();
 						OXSAK_Toggle("Show Screen Crosshair", &s_ShowCrosshair);
+						ImGui::Spacing();
+						if (s_ShowCrosshair) {
+							ImGui::SliderFloat("Crosshair Size", &s_CrosshairSize, 4.0f, 24.0f, "%.0f px");
+							ImGui::Spacing();
+							ImGui::ColorEdit4("Crosshair Color", (float*)&s_CrosshairColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						}
 					}
 					ImGui::EndChild();
 				}
 				// -------------------------------------------------------------
-				// TAB 4: SETTINGS
+				// TAB 3: SETTING
 				// -------------------------------------------------------------
-				else if (s_SelectedTab == 4)
+				else if (s_SelectedTab == 3)
 				{
 					ImGui::BeginChild("SettingsCol1", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] LAUNCHER CONFIGURATION");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "FLOATING LAUNCHER");
 						ImGui::Separator();
 						ImGui::Spacing();
 
 						ImGui::Text("Badge Dimensions: 56 x 56 pt");
-						ImGui::Text("Launcher Glow: Enabled (#FF8A00)");
-						ImGui::Text("Persistence: NSUserDefaults");
-						ImGui::Text("Gesture: Tap or 2-Finger Double Tap");
+						ImGui::Text("Glowing Border: Active (#FF8A00)");
+						ImGui::Text("Position Memory: NSUserDefaults");
+						ImGui::Text("Gestures: Tap, Drag, 2-Finger Tap");
 					}
 					ImGui::EndChild();
 
@@ -672,12 +731,14 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 					ImGui::BeginChild("SettingsCol2", ImVec2(colW, 0), true);
 					{
-						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] THEME TUNING");
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "THEME & OPACITY");
 						ImGui::Separator();
 						ImGui::Spacing();
 
 						ImGui::SliderFloat("Menu Opacity", &s_MenuAlpha, 0.50f, 1.00f, "%.2f");
 						ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = s_MenuAlpha;
+						ImGui::Spacing();
+						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 0.8f), "Theme: Cyberpunk Orange");
 					}
 					ImGui::EndChild();
 				}
@@ -687,17 +748,18 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 			ImGui::End();
 		}
 
-		// Connect safe visual ESP state to engine
-		g_ESP.bEnable = s_ESPEnable;
-		g_ESP.bBox = s_ESPBox;
-		g_ESP.bLine = s_ESPLine;
-		g_ESP.bSkeleton = s_ESPSkeleton;
-		g_ESP.bDistance = s_ESPDistance;
-		g_ESP.topPosFloat = s_HeadOffset;
-		g_ESP.botPosFloat = s_FeetOffset;
-		g_ESP.widthScale = s_WidthScale;
+		// Draw Crosshair on screen if enabled
+		if (s_ShowCrosshair) {
+			ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+			float midX = screenW * 0.5f;
+			float midY = screenH * 0.5f;
+			ImU32 col = ImColor(s_CrosshairColor);
+			drawList->AddLine(ImVec2(midX - s_CrosshairSize, midY), ImVec2(midX + s_CrosshairSize, midY), col, 1.5f);
+			drawList->AddLine(ImVec2(midX, midY - s_CrosshairSize), ImVec2(midX, midY + s_CrosshairSize), col, 1.5f);
+		}
 
-		if (s_ESPEnable) {
+		// Draw ESP Line and Box overlay if enabled
+		if (g_ESP.bEnable) {
 			DrawUniversalESP();
 		}
 

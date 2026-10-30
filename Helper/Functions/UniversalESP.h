@@ -59,17 +59,23 @@ int     (*Screen_get_height)() = nullptr;
 // 3. USER INTERFACE SETTINGS
 // =========================================================================================
 struct ESPSettings {
-    bool   bEnable      = true;                      // Master ESP toggle
+    bool   bEnable      = false;                     // Master ESP toggle
     bool   bBox         = true;                      // 2D Bounding Box
+    bool   bCornerBox   = false;                     // Corner Box Style
     bool   bLine        = true;                      // Snapline to feet
+    int    lineOrigin   = 0;                         // 0: Bottom, 1: Center, 2: Top
     bool   bDistance    = true;                      // Distance text
     bool   bSkeleton    = true;                      // 15-Joint Humanoid Skeleton ESP
+    bool   bHealth      = true;                      // Health Bar
     bool   bDrawSelf    = false;                     // Draw box on local player (diagnostic)
     float  topPosFloat  = 1.85f;                     // Head offset (height in meters)
     float  botPosFloat  = 0.00f;                     // Feet offset
     float  widthScale   = 0.50f;                     // Width multiplier
-    ImVec4 boxColor     = ImColor(255, 50, 50, 255);  // Red
-    ImVec4 lineColor    = ImColor(255, 230, 0, 220); // Yellow
+    float  boxThickness = 1.0f;                      // Box outline thickness (thin default)
+    float  lineThickness = 1.0f;                     // Snapline thickness (thin default)
+    float  skeletonThickness = 1.0f;                 // Skeleton thickness (thin default)
+    ImVec4 boxColor     = ImColor(255, 138, 0, 255);  // #FF8A00 Orange default
+    ImVec4 lineColor    = ImColor(255, 179, 71, 220); // #FFB347 Amber default
     ImVec4 skeletonColor = ImColor(255, 255, 255, 240); // White
 } g_ESP;
 
@@ -390,22 +396,40 @@ void DrawUniversalESP() {
             continue;
         }
 
-        // 4. Draw Bounding Box
+        // 4. Draw Bounding Box (Normal or Corner Box)
         if (g_ESP.bBox) {
-            // Black outline (thickness 3.0) for high visibility on any terrain
-            drawList->AddRect(boxMin, boxMax, ImColor(0, 0, 0, 220), 0.0f, 0, 3.0f);
-            // Colored box
-            drawList->AddRect(boxMin, boxMax, ImColor(g_ESP.boxColor), 0.0f, 0, 1.5f);
+            float th = fmaxf(0.5f, g_ESP.boxThickness);
+            if (g_ESP.bCornerBox) {
+                // Pro Corner Box
+                float cornerLen = fminf(width * 0.25f, height * 0.25f);
+                // Top-Left
+                drawList->AddLine(boxMin, ImVec2(boxMin.x + cornerLen, boxMin.y), ImColor(g_ESP.boxColor), th);
+                drawList->AddLine(boxMin, ImVec2(boxMin.x, boxMin.y + cornerLen), ImColor(g_ESP.boxColor), th);
+                // Top-Right
+                drawList->AddLine(ImVec2(boxMax.x, boxMin.y), ImVec2(boxMax.x - cornerLen, boxMin.y), ImColor(g_ESP.boxColor), th);
+                drawList->AddLine(ImVec2(boxMax.x, boxMin.y), ImVec2(boxMax.x, boxMin.y + cornerLen), ImColor(g_ESP.boxColor), th);
+                // Bottom-Left
+                drawList->AddLine(ImVec2(boxMin.x, boxMax.y), ImVec2(boxMin.x + cornerLen, boxMax.y), ImColor(g_ESP.boxColor), th);
+                drawList->AddLine(ImVec2(boxMin.x, boxMax.y), ImVec2(boxMin.x, boxMax.y - cornerLen), ImColor(g_ESP.boxColor), th);
+                // Bottom-Right
+                drawList->AddLine(boxMax, ImVec2(boxMax.x - cornerLen, boxMax.y), ImColor(g_ESP.boxColor), th);
+                drawList->AddLine(boxMax, ImVec2(boxMax.x, boxMax.y - cornerLen), ImColor(g_ESP.boxColor), th);
+            } else {
+                // Clean Full Box with subtle dark shadow
+                drawList->AddRect(boxMin, boxMax, ImColor(0, 0, 0, 160), 0.0f, 0, th + 1.0f);
+                drawList->AddRect(boxMin, boxMax, ImColor(g_ESP.boxColor), 0.0f, 0, th);
+            }
         }
 
-        // 5. Draw Snapline (Tracer from bottom-center of screen to enemy feet)
+        // 5. Draw Snapline
         if (g_ESP.bLine) {
-            drawList->AddLine(
-                ImVec2(screenMidX, screenBottomY), 
-                ImVec2(centerX, botY), 
-                ImColor(g_ESP.lineColor), 
-                1.5f
-            );
+            float startY = screenBottomY;
+            if (g_ESP.lineOrigin == 1) startY = dispH * 0.5f;
+            else if (g_ESP.lineOrigin == 2) startY = 0.0f;
+
+            float th = fmaxf(0.5f, g_ESP.lineThickness);
+            drawList->AddLine(ImVec2(screenMidX, startY), ImVec2(centerX, botY), ImColor(0, 0, 0, 160), th + 1.0f);
+            drawList->AddLine(ImVec2(screenMidX, startY), ImVec2(centerX, botY), ImColor(g_ESP.lineColor), th);
         }
 
         // 6. Draw 15-Joint Humanoid Bone Skeleton
@@ -441,11 +465,12 @@ void DrawUniversalESP() {
             Vector3 rFoot3D  = rootPos + Vector3(W * 0.65f, H * 0.02f, 0.0f);
 
             // Lambda to project and draw an outlined bone segment
+            float th = fmaxf(0.5f, g_ESP.skeletonThickness);
             auto DrawBone = [&](const Vector3& p1, const Vector3& p2) {
                 ImVec2 s1, s2;
                 if (WorldToScreen(p1, s1) && WorldToScreen(p2, s2)) {
-                    drawList->AddLine(s1, s2, ImColor(0, 0, 0, 220), 2.5f);
-                    drawList->AddLine(s1, s2, ImColor(g_ESP.skeletonColor), 1.5f);
+                    drawList->AddLine(s1, s2, ImColor(0, 0, 0, 160), th + 1.0f);
+                    drawList->AddLine(s1, s2, ImColor(g_ESP.skeletonColor), th);
                 }
             };
 
