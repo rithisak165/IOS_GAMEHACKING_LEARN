@@ -63,12 +63,14 @@ struct ESPSettings {
     bool   bBox         = true;                      // 2D Bounding Box
     bool   bLine        = true;                      // Snapline to feet
     bool   bDistance    = true;                      // Distance text
+    bool   bSkeleton    = true;                      // 15-Joint Humanoid Skeleton ESP
     bool   bDrawSelf    = false;                     // Draw box on local player (diagnostic)
     float  topPosFloat  = 1.85f;                     // Head offset (height in meters)
     float  botPosFloat  = 0.00f;                     // Feet offset
     float  widthScale   = 0.50f;                     // Width multiplier
     ImVec4 boxColor     = ImColor(255, 50, 50, 255);  // Red
     ImVec4 lineColor    = ImColor(255, 230, 0, 220); // Yellow
+    ImVec4 skeletonColor = ImColor(255, 255, 255, 240); // White
 } g_ESP;
 
 // Safe memory probe to prevent EXC_BAD_ACCESS crashes
@@ -406,7 +408,82 @@ void DrawUniversalESP() {
             );
         }
 
-        // 6. Draw Distance Label
+        // 6. Draw 15-Joint Humanoid Bone Skeleton
+        if (g_ESP.bSkeleton) {
+            float H = g_ESP.topPosFloat - g_ESP.botPosFloat;
+            if (H < 1.0f) H = 1.8f;
+            float W = H * 0.22f;
+
+            // Define 15 Joint coordinates in 3D world space
+            Vector3 head3D   = rootPos + Vector3(0.0f, H * 0.95f, 0.0f);
+            Vector3 neck3D   = rootPos + Vector3(0.0f, H * 0.82f, 0.0f);
+            Vector3 spine3D  = rootPos + Vector3(0.0f, H * 0.65f, 0.0f);
+            Vector3 pelvis3D = rootPos + Vector3(0.0f, H * 0.50f, 0.0f);
+
+            // Left Arm
+            Vector3 lShoulder3D = rootPos + Vector3(-W * 1.1f, H * 0.80f, 0.0f);
+            Vector3 lElbow3D    = rootPos + Vector3(-W * 1.4f, H * 0.58f, 0.0f);
+            Vector3 lHand3D     = rootPos + Vector3(-W * 1.5f, H * 0.38f, 0.0f);
+
+            // Right Arm
+            Vector3 rShoulder3D = rootPos + Vector3(W * 1.1f, H * 0.80f, 0.0f);
+            Vector3 rElbow3D    = rootPos + Vector3(W * 1.4f, H * 0.58f, 0.0f);
+            Vector3 rHand3D     = rootPos + Vector3(W * 1.5f, H * 0.38f, 0.0f);
+
+            // Left Leg
+            Vector3 lHip3D   = rootPos + Vector3(-W * 0.55f, H * 0.48f, 0.0f);
+            Vector3 lKnee3D  = rootPos + Vector3(-W * 0.60f, H * 0.26f, 0.0f);
+            Vector3 lFoot3D  = rootPos + Vector3(-W * 0.65f, H * 0.02f, 0.0f);
+
+            // Right Leg
+            Vector3 rHip3D   = rootPos + Vector3(W * 0.55f, H * 0.48f, 0.0f);
+            Vector3 rKnee3D  = rootPos + Vector3(W * 0.60f, H * 0.26f, 0.0f);
+            Vector3 rFoot3D  = rootPos + Vector3(W * 0.65f, H * 0.02f, 0.0f);
+
+            // Lambda to project and draw an outlined bone segment
+            auto DrawBone = [&](const Vector3& p1, const Vector3& p2) {
+                ImVec2 s1, s2;
+                if (WorldToScreen(p1, s1) && WorldToScreen(p2, s2)) {
+                    drawList->AddLine(s1, s2, ImColor(0, 0, 0, 220), 2.5f);
+                    drawList->AddLine(s1, s2, ImColor(g_ESP.skeletonColor), 1.5f);
+                }
+            };
+
+            // Head Circle
+            ImVec2 sHead;
+            if (WorldToScreen(head3D, sHead)) {
+                float headRadius = fmaxf(3.0f, height * 0.065f);
+                drawList->AddCircle(sHead, headRadius, ImColor(0, 0, 0, 220), 16, 2.5f);
+                drawList->AddCircle(sHead, headRadius, ImColor(g_ESP.skeletonColor), 16, 1.5f);
+            }
+
+            // Torso / Spine
+            DrawBone(head3D, neck3D);
+            DrawBone(neck3D, spine3D);
+            DrawBone(spine3D, pelvis3D);
+
+            // Left Arm
+            DrawBone(neck3D, lShoulder3D);
+            DrawBone(lShoulder3D, lElbow3D);
+            DrawBone(lElbow3D, lHand3D);
+
+            // Right Arm
+            DrawBone(neck3D, rShoulder3D);
+            DrawBone(rShoulder3D, rElbow3D);
+            DrawBone(rElbow3D, rHand3D);
+
+            // Left Leg
+            DrawBone(pelvis3D, lHip3D);
+            DrawBone(lHip3D, lKnee3D);
+            DrawBone(lKnee3D, lFoot3D);
+
+            // Right Leg
+            DrawBone(pelvis3D, rHip3D);
+            DrawBone(rHip3D, rKnee3D);
+            DrawBone(rKnee3D, rFoot3D);
+        }
+
+        // 7. Draw Distance Label
         if (g_ESP.bDistance && distance > 0.0f) {
             char distText[32];
             snprintf(distText, sizeof(distText), "%.0fm", distance);

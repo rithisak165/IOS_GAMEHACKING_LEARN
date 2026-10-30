@@ -282,6 +282,10 @@ void ColorPicker(const char *name, ImVec4 &color)
 					ImGui::SameLine();
 					ColorPicker("##LineColor", g_ESP.lineColor);
 
+					ImGui::Checkbox("Skeleton / Bone ESP", &g_ESP.bSkeleton);
+					ImGui::SameLine();
+					ColorPicker("##SkeletonColor", g_ESP.skeletonColor);
+
 					ImGui::Checkbox("Distance ESP", &g_ESP.bDistance);
 
 					ImGui::Checkbox("Draw Local Player (Self Check)", &g_ESP.bDrawSelf);
