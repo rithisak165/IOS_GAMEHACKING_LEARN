@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>ESP 3D Demo</string>
+    <string>OXSAK Demo</string>
     <key>CFBundleExecutable</key>
     <string>ESP3DDemo</string>
     <key>CFBundleIdentifier</key>
-    <string>com.rithisak.esp3ddemo</string>
+    <string>com.oxsak.telemetry</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>ESP3DDemo</string>
+    <string>OXSAK Demo</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -34,9 +34,9 @@
     <false/>
     <key>UISupportedInterfaceOrientations</key>
     <array>
-        <string>UIInterfaceOrientationPortrait</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
+        <string>UIInterfaceOrientationPortrait</string>
     </array>
     <key>CFBundleIcons</key>
     <dict>
@@ -50,4 +50,3 @@
     </dict>
 </dict>
 </plist>
-

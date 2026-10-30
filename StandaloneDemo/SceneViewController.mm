@@ -12,28 +12,51 @@
 #include "IMGUI/imgui_internal.h"
 #include "IMGUI/imgui_impl_metal.h"
 
-// Telemetry & ESP Settings
-struct ESPOptions {
-    bool   bMasterESP      = true;
-    bool   bSkeleton       = true;
-    bool   bBox            = true;
-    bool   bSnaplines      = true;
-    bool   bDistance       = true;
-    bool   bHealth         = true;
-    bool   bFOVCircle      = true;
-    float  fovRadius       = 140.0f;
-    float  headOffset      = 1.85f;
-    float  boxWidthScale   = 0.45f;
-    ImVec4 skeletonColor   = ImVec4(0.0f, 1.0f, 0.9f, 1.0f); // Bright Cyan
-    ImVec4 boxColor        = ImVec4(1.0f, 0.2f, 0.2f, 1.0f); // Bright Red
-    ImVec4 lineColor       = ImVec4(1.0f, 0.9f, 0.1f, 0.9f); // Gold Yellow
-    ImVec4 fovColor        = ImVec4(1.0f, 1.0f, 1.0f, 0.4f); // Subtle White
+// =========================================================================================
+// OXSAK STATE & TELEMETRY CONFIGURATION (Orange Cyberpunk Theme)
+// =========================================================================================
+struct OXSAKState {
+    // Navigation State
+    int currentTab = 0;       // 0: AIMBOT, 1: ESP, 2: MISC, 3: SETTINGS
+    int currentSubTab = 0;    // 0: Aimbot, 1: Silent Aim
+
+    // AIMBOT & SILENT AIM Settings (Matching Reference Reference)
+    bool  bEnableAim          = false;
+    bool  bVisibleOnly        = true;
+    bool  bIgnoreTeam         = true;
+    bool  bSticky             = true;
+    bool  bAutoShoot          = false;
+    bool  bLockLine           = true;
+    float fovRadius           = 70.0f;
+    float smoothness          = 10.0f;
+    float maxTurn             = 0.0f;
+    float reactionMs          = 0.0f;
+    float jitter              = 0.07f;
+
+    // ESP Visuals Settings
+    bool  bEnableESP          = true;
+    bool  bSkeleton           = true;
+    bool  bBox                = true;
+    bool  bSnaplines          = true;
+    bool  bDistance           = true;
+    bool  bHealth             = true;
+    float headOffset          = 1.85f;
+    float botOffset           = 0.00f;
+    float boxWidthScale       = 0.45f;
+
+    // Custom Color Palette
+    ImVec4 colPrimaryOrange   = ImVec4(1.0f, 0.54f, 0.0f, 1.0f);   // #FF8A00
+    ImVec4 colSecondaryOrange = ImVec4(1.0f, 0.70f, 0.28f, 1.0f);  // #FFB347
+    ImVec4 colSkeleton        = ImVec4(1.0f, 0.54f, 0.0f, 0.95f);  // Orange Skeleton
+    ImVec4 colBox             = ImVec4(1.0f, 0.35f, 0.1f, 1.0f);   // Warm Box
+    ImVec4 colSnapline        = ImVec4(1.0f, 0.70f, 0.28f, 0.9f);  // Tracer Line
+    ImVec4 colFOV             = ImVec4(1.0f, 0.54f, 0.0f, 0.45f);  // FOV Circle
 };
 
-static ESPOptions g_Settings;
+static OXSAKState g_State;
 static bool g_ShowMenu = true;
 
-// Structure to track 3D target dummies
+// Structure for 3D Humanoid Dummies
 struct DummyTarget {
     std::string name;
     SCNNode *rootNode;
@@ -41,7 +64,9 @@ struct DummyTarget {
     float maxHealth;
 };
 
-// Forward declaration of touch-intercepting MTKView
+// =========================================================================================
+// TOUCH PASSTHROUGH OVERLAY VIEW
+// =========================================================================================
 @interface OverlayTouchView : MTKView
 @end
 
@@ -50,13 +75,12 @@ struct DummyTarget {
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event
 {
     if (!g_ShowMenu || !ImGui::GetCurrentContext()) {
-        return NO; // When menu is closed, touch goes directly to 3D camera controls
+        return NO; // Menu closed -> touches pass to 3D orbit camera
     }
 
     ImGuiContext *g = ImGui::GetCurrentContext();
     ImVec2 pt = ImVec2(point.x, point.y);
 
-    // Check if touch is within any open ImGui window
     for (int i = 0; i < g->Windows.Size; i++) {
         ImGuiWindow *window = g->Windows[i];
         if (!window || !window->WasActive || window->Hidden) continue;
@@ -68,38 +92,59 @@ struct DummyTarget {
         }
     }
 
-    if (g->OpenPopupStack.Size > 0) {
-        return YES;
-    }
-
-    return NO; // Pass touch through to 3D scene
+    if (g->OpenPopupStack.Size > 0) return YES;
+    return NO;
 }
 
 @end
 
-// Floating Toggle Button (Draggable FAB)
-@interface FloatingESPButton : UIButton
+// =========================================================================================
+// FLOATING OXSAK LAUNCHER BADGE (Draggable with Orange Glow)
+// =========================================================================================
+@interface FloatingOXSAKButton : UIButton
 @property (nonatomic, assign) CGPoint lastPoint;
 @end
 
-@implementation FloatingESPButton
+@implementation FloatingOXSAKButton
 
 - (instancetype)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
     if (self) {
-        self.backgroundColor = [UIColor colorWithRed:0.08 green:0.10 blue:0.15 alpha:0.85];
         self.layer.cornerRadius = frame.size.width / 2.0;
-        self.layer.borderWidth = 2.0;
-        self.layer.borderColor = [UIColor colorWithRed:0.0 green:0.85 blue:1.0 alpha:0.9].CGColor;
-        self.layer.shadowColor = [UIColor colorWithRed:0.0 green:0.85 blue:1.0 alpha:0.6].CGColor;
-        self.layer.shadowRadius = 8.0;
-        self.layer.shadowOpacity = 0.8;
+        self.layer.masksToBounds = NO;
+        self.layer.borderWidth = 2.5;
+        self.layer.borderColor = [UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:0.95].CGColor; // #FF8A00
+
+        // Orange glowing shadow effect
+        self.layer.shadowColor = [UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:0.9].CGColor;
+        self.layer.shadowRadius = 12.0;
+        self.layer.shadowOpacity = 0.85;
         self.layer.shadowOffset = CGSizeMake(0, 0);
-        
-        [self setTitle:@"ESP" forState:UIControlStateNormal];
-        [self setTitleColor:[UIColor colorWithRed:0.0 green:0.95 blue:1.0 alpha:1.0] forState:UIControlStateNormal];
-        self.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+
+        // Load custom OXSAK emblem
+        NSString *path = [[NSBundle mainBundle] pathForResource:@"oxsak_badge" ofType:@"png"];
+        UIImage *img = [UIImage imageWithContentsOfFile:path];
+        if (!img) img = [UIImage imageNamed:@"oxsak_badge.png"];
+        if (img) {
+            [self setImage:img forState:UIControlStateNormal];
+            self.imageView.contentMode = UIViewContentModeScaleAspectFit;
+            self.imageView.layer.cornerRadius = (frame.size.width - 4.0) / 2.0;
+            self.imageView.clipsToBounds = YES;
+        } else {
+            self.backgroundColor = [UIColor colorWithRed:0.06 green:0.06 blue:0.08 alpha:0.9];
+            [self setTitle:@"0xSAK" forState:UIControlStateNormal];
+            [self setTitleColor:[UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:1.0] forState:UIControlStateNormal];
+            self.titleLabel.font = [UIFont boldSystemFontOfSize:13];
+        }
+
+        // Restore saved position
+        NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+        if ([defs objectForKey:@"OXSAK_Btn_X"] && [defs objectForKey:@"OXSAK_Btn_Y"]) {
+            CGFloat x = [defs floatForKey:@"OXSAK_Btn_X"];
+            CGFloat y = [defs floatForKey:@"OXSAK_Btn_Y"];
+            self.center = CGPointMake(x, y);
+        }
 
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
         [self addGestureRecognizer:pan];
@@ -114,26 +159,32 @@ struct DummyTarget {
         _lastPoint = self.center;
     }
     CGPoint newCenter = CGPointMake(_lastPoint.x + translation.x, _lastPoint.y + translation.y);
-    
-    // Clamp to screen bounds with margin
     CGRect bounds = self.superview.bounds;
     CGFloat halfW = self.bounds.size.width / 2.0;
     CGFloat halfH = self.bounds.size.height / 2.0;
-    newCenter.x = fmax(halfW + 10, fmin(bounds.size.width - halfW - 10, newCenter.x));
+    newCenter.x = fmax(halfW + 12, fmin(bounds.size.width - halfW - 12, newCenter.x));
     newCenter.y = fmax(halfH + 20, fmin(bounds.size.height - halfH - 20, newCenter.y));
-    
     self.center = newCenter;
+
+    if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
+        NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+        [defs setFloat:self.center.x forKey:@"OXSAK_Btn_X"];
+        [defs setFloat:self.center.y forKey:@"OXSAK_Btn_Y"];
+        [defs synchronize];
+    }
 }
 
 @end
 
-// Main ViewController
+// =========================================================================================
+// MAIN VIEW CONTROLLER (3D SceneKit + Metal ImGui)
+// =========================================================================================
 @interface SceneViewController () <MTKViewDelegate>
 @property (nonatomic, strong) SCNView *scnView;
 @property (nonatomic, strong) SCNNode *cameraOrbitNode;
 @property (nonatomic, strong) SCNNode *cameraNode;
 @property (nonatomic, strong) OverlayTouchView *metalOverlayView;
-@property (nonatomic, strong) FloatingESPButton *floatingButton;
+@property (nonatomic, strong) FloatingOXSAKButton *floatingButton;
 @property (nonatomic, strong) id<MTLDevice> device;
 @property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
 @property (nonatomic, assign) CGPoint lastPanPoint;
@@ -172,7 +223,7 @@ struct DummyTarget {
 {
     _scnView = [[SCNView alloc] initWithFrame:self.view.bounds];
     _scnView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _scnView.backgroundColor = [UIColor colorWithRed:0.05 green:0.07 blue:0.10 alpha:1.0];
+    _scnView.backgroundColor = [UIColor colorWithRed:0.04 green:0.04 blue:0.06 alpha:1.0];
     _scnView.antialiasingMode = SCNAntialiasingModeMultisampling4X;
     _scnView.preferredFramesPerSecond = 60;
     [self.view addSubview:_scnView];
@@ -180,36 +231,36 @@ struct DummyTarget {
     SCNScene *scene = [SCNScene scene];
     _scnView.scene = scene;
 
-    // Floor with reflective dark grid texture
+    // Dark grid floor with reflective surface
     SCNFloor *floor = [SCNFloor floor];
-    floor.reflectivity = 0.15;
-    floor.firstMaterial.diffuse.contents = [UIColor colorWithRed:0.12 green:0.14 blue:0.18 alpha:1.0];
+    floor.reflectivity = 0.18;
+    floor.firstMaterial.diffuse.contents = [UIColor colorWithRed:0.08 green:0.08 blue:0.11 alpha:1.0];
     SCNNode *floorNode = [SCNNode nodeWithGeometry:floor];
     [scene.rootNode addChildNode:floorNode];
 
-    // Ambient Lighting
+    // Ambient Light
     SCNNode *ambientLight = [SCNNode node];
     ambientLight.light = [SCNLight light];
     ambientLight.light.type = SCNLightTypeAmbient;
-    ambientLight.light.color = [UIColor colorWithWhite:0.35 alpha:1.0];
+    ambientLight.light.color = [UIColor colorWithWhite:0.32 alpha:1.0];
     [scene.rootNode addChildNode:ambientLight];
 
     // Directional Sunlight with Shadows
     SCNNode *sunLight = [SCNNode node];
     sunLight.light = [SCNLight light];
     sunLight.light.type = SCNLightTypeDirectional;
-    sunLight.light.color = [UIColor colorWithRed:0.95 green:0.95 blue:1.0 alpha:1.0];
+    sunLight.light.color = [UIColor colorWithRed:1.0 green:0.95 blue:0.90 alpha:1.0];
     sunLight.light.castsShadow = YES;
     sunLight.position = SCNVector3Make(15, 25, 15);
     sunLight.eulerAngles = SCNVector3Make(-M_PI / 3.0, M_PI / 4.0, 0);
     [scene.rootNode addChildNode:sunLight];
 
-    // Environment Obstacles / Tactical Crates
-    [self addCrateAt:SCNVector3Make(-4.5, 1.2, -3.0) size:SCNVector3Make(2.4, 2.4, 2.4) color:[UIColor colorWithRed:0.25 green:0.35 blue:0.45 alpha:1.0]];
-    [self addCrateAt:SCNVector3Make(5.0, 1.5, -4.5) size:SCNVector3Make(2.0, 3.0, 2.0) color:[UIColor colorWithRed:0.20 green:0.30 blue:0.40 alpha:1.0]];
-    [self addCrateAt:SCNVector3Make(0.0, 1.0, -8.0) size:SCNVector3Make(4.0, 2.0, 1.5) color:[UIColor colorWithRed:0.30 green:0.25 blue:0.35 alpha:1.0]];
+    // Tactical Crates / Cover
+    [self addCrateAt:SCNVector3Make(-4.5, 1.2, -3.0) size:SCNVector3Make(2.4, 2.4, 2.4) color:[UIColor colorWithRed:0.20 green:0.20 blue:0.28 alpha:1.0]];
+    [self addCrateAt:SCNVector3Make(5.0, 1.5, -4.5) size:SCNVector3Make(2.0, 3.0, 2.0) color:[UIColor colorWithRed:0.18 green:0.22 blue:0.28 alpha:1.0]];
+    [self addCrateAt:SCNVector3Make(0.0, 1.0, -8.0) size:SCNVector3Make(4.0, 2.0, 1.5) color:[UIColor colorWithRed:0.25 green:0.20 blue:0.25 alpha:1.0]];
 
-    // Camera Rig (Orbit Node -> Camera Node)
+    // Camera Rig
     _cameraOrbitNode = [SCNNode node];
     _cameraOrbitNode.position = SCNVector3Make(0, 1.5, 0);
     [scene.rootNode addChildNode:_cameraOrbitNode];
@@ -234,7 +285,6 @@ struct DummyTarget {
 {
     SCNBox *box = [SCNBox boxWithWidth:size.x height:size.y length:size.z chamferRadius:0.08];
     box.firstMaterial.diffuse.contents = color;
-    box.firstMaterial.roughness.contents = @(0.6);
     SCNNode *node = [SCNNode nodeWithGeometry:box];
     node.position = pos;
     [_scnView.scene.rootNode addChildNode:node];
@@ -245,17 +295,16 @@ struct DummyTarget {
     SCNNode *dummyRoot = [SCNNode node];
     dummyRoot.position = pos;
 
-    // Body Color Materials (Tactical Soldier Appearance)
     SCNMaterial *skinMat = [SCNMaterial material];
     skinMat.diffuse.contents = [UIColor colorWithRed:0.85 green:0.65 blue:0.55 alpha:1.0];
 
     SCNMaterial *armorMat = [SCNMaterial material];
-    armorMat.diffuse.contents = [UIColor colorWithRed:0.20 green:0.28 blue:0.22 alpha:1.0]; // Army Olive
+    armorMat.diffuse.contents = [UIColor colorWithRed:0.18 green:0.22 blue:0.20 alpha:1.0];
 
     SCNMaterial *clothMat = [SCNMaterial material];
-    clothMat.diffuse.contents = [UIColor colorWithRed:0.18 green:0.20 blue:0.22 alpha:1.0]; // Dark Navy
+    clothMat.diffuse.contents = [UIColor colorWithRed:0.12 green:0.14 blue:0.18 alpha:1.0];
 
-    // 1. Pelvis / Hips (y = 0.9m)
+    // 1. Pelvis (y = 0.9m)
     SCNBox *pelvisGeo = [SCNBox boxWithWidth:0.34 height:0.22 length:0.22 chamferRadius:0.04];
     pelvisGeo.materials = @[clothMat];
     SCNNode *pelvis = [SCNNode nodeWithGeometry:pelvisGeo];
@@ -287,102 +336,27 @@ struct DummyTarget {
     head.position = SCNVector3Make(0, 1.78, 0);
     [dummyRoot addChildNode:head];
 
-    // Tactical Helmet
-    SCNSphere *helmetGeo = [SCNSphere sphereWithRadius:0.155];
-    helmetGeo.materials = @[armorMat];
-    SCNNode *helmet = [SCNNode nodeWithGeometry:helmetGeo];
-    helmet.position = SCNVector3Make(0, 0.04, 0);
-    [head addChildNode:helmet];
+    // Arms
+    SCNNode *lShoulder = [SCNNode node]; lShoulder.name = @"lShoulder"; lShoulder.position = SCNVector3Make(-0.28, 1.45, 0); [dummyRoot addChildNode:lShoulder];
+    SCNNode *lElbow    = [SCNNode node]; lElbow.name    = @"lElbow";    lElbow.position    = SCNVector3Make(-0.38, 1.15, 0.05); [dummyRoot addChildNode:lElbow];
+    SCNNode *lHand     = [SCNNode node]; lHand.name     = @"lHand";     lHand.position     = SCNVector3Make(-0.42, 0.85, 0.15); [dummyRoot addChildNode:lHand];
 
-    // 5-7. Left Arm (Shoulder -> Elbow -> Hand)
-    SCNNode *lShoulder = [SCNNode node];
-    lShoulder.name = @"lShoulder";
-    lShoulder.position = SCNVector3Make(-0.28, 1.45, 0);
-    [dummyRoot addChildNode:lShoulder];
+    SCNNode *rShoulder = [SCNNode node]; rShoulder.name = @"rShoulder"; rShoulder.position = SCNVector3Make(0.28, 1.45, 0); [dummyRoot addChildNode:rShoulder];
+    SCNNode *rElbow    = [SCNNode node]; rElbow.name    = @"rElbow";    rElbow.position    = SCNVector3Make(0.38, 1.15, -0.05); [dummyRoot addChildNode:rElbow];
+    SCNNode *rHand     = [SCNNode node]; rHand.name     = @"rHand";     rHand.position     = SCNVector3Make(0.42, 0.85, -0.15); [dummyRoot addChildNode:rHand];
 
-    SCNCapsule *lUpperArm = [SCNCapsule capsuleWithCapRadius:0.055 height:0.3];
-    lUpperArm.materials = @[armorMat];
-    SCNNode *lUpperArmNode = [SCNNode nodeWithGeometry:lUpperArm];
-    lUpperArmNode.position = SCNVector3Make(-0.06, -0.15, 0);
-    [lShoulder addChildNode:lUpperArmNode];
+    // Legs
+    SCNNode *lHip  = [SCNNode node]; lHip.name  = @"lHip";  lHip.position  = SCNVector3Make(-0.16, 0.82, 0); [dummyRoot addChildNode:lHip];
+    SCNNode *lKnee = [SCNNode node]; lKnee.name = @"lKnee"; lKnee.position = SCNVector3Make(-0.17, 0.45, 0.04); [dummyRoot addChildNode:lKnee];
+    SCNNode *lFoot = [SCNNode node]; lFoot.name = @"lFoot"; lFoot.position = SCNVector3Make(-0.18, 0.08, 0.1); [dummyRoot addChildNode:lFoot];
 
-    SCNNode *lElbow = [SCNNode node];
-    lElbow.name = @"lElbow";
-    lElbow.position = SCNVector3Make(-0.38, 1.15, 0.05);
-    [dummyRoot addChildNode:lElbow];
-
-    SCNNode *lHand = [SCNNode node];
-    lHand.name = @"lHand";
-    lHand.position = SCNVector3Make(-0.42, 0.85, 0.15);
-    [dummyRoot addChildNode:lHand];
-
-    // 8-10. Right Arm (Shoulder -> Elbow -> Hand)
-    SCNNode *rShoulder = [SCNNode node];
-    rShoulder.name = @"rShoulder";
-    rShoulder.position = SCNVector3Make(0.28, 1.45, 0);
-    [dummyRoot addChildNode:rShoulder];
-
-    SCNCapsule *rUpperArm = [SCNCapsule capsuleWithCapRadius:0.055 height:0.3];
-    rUpperArm.materials = @[armorMat];
-    SCNNode *rUpperArmNode = [SCNNode nodeWithGeometry:rUpperArm];
-    rUpperArmNode.position = SCNVector3Make(0.06, -0.15, 0);
-    [rShoulder addChildNode:rUpperArmNode];
-
-    SCNNode *rElbow = [SCNNode node];
-    rElbow.name = @"rElbow";
-    rElbow.position = SCNVector3Make(0.38, 1.15, -0.05);
-    [dummyRoot addChildNode:rElbow];
-
-    SCNNode *rHand = [SCNNode node];
-    rHand.name = @"rHand";
-    rHand.position = SCNVector3Make(0.42, 0.85, -0.15);
-    [dummyRoot addChildNode:rHand];
-
-    // 11-13. Left Leg (Hip -> Knee -> Foot)
-    SCNNode *lHip = [SCNNode node];
-    lHip.name = @"lHip";
-    lHip.position = SCNVector3Make(-0.16, 0.82, 0);
-    [dummyRoot addChildNode:lHip];
-
-    SCNCapsule *lLegGeo = [SCNCapsule capsuleWithCapRadius:0.065 height:0.4];
-    lLegGeo.materials = @[clothMat];
-    SCNNode *lThigh = [SCNNode nodeWithGeometry:lLegGeo];
-    lThigh.position = SCNVector3Make(0, -0.2, 0);
-    [lHip addChildNode:lThigh];
-
-    SCNNode *lKnee = [SCNNode node];
-    lKnee.name = @"lKnee";
-    lKnee.position = SCNVector3Make(-0.17, 0.45, 0.04);
-    [dummyRoot addChildNode:lKnee];
-
-    SCNNode *lFoot = [SCNNode node];
-    lFoot.name = @"lFoot";
-    lFoot.position = SCNVector3Make(-0.18, 0.08, 0.1);
-    [dummyRoot addChildNode:lFoot];
-
-    // 14-16. Right Leg (Hip -> Knee -> Foot)
-    SCNNode *rHip = [SCNNode node];
-    rHip.name = @"rHip";
-    rHip.position = SCNVector3Make(0.16, 0.82, 0);
-    [dummyRoot addChildNode:rHip];
-
-    SCNNode *rThigh = [SCNNode nodeWithGeometry:lLegGeo];
-    rThigh.position = SCNVector3Make(0, -0.2, 0);
-    [rHip addChildNode:rThigh];
-
-    SCNNode *rKnee = [SCNNode node];
-    rKnee.name = @"rKnee";
-    rKnee.position = SCNVector3Make(0.17, 0.45, -0.04);
-    [dummyRoot addChildNode:rKnee];
-
-    SCNNode *rFoot = [SCNNode node];
-    rFoot.name = @"rFoot";
-    rFoot.position = SCNVector3Make(0.18, 0.08, -0.1);
-    [dummyRoot addChildNode:rFoot];
+    SCNNode *rHip  = [SCNNode node]; rHip.name  = @"rHip";  rHip.position  = SCNVector3Make(0.16, 0.82, 0); [dummyRoot addChildNode:rHip];
+    SCNNode *rKnee = [SCNNode node]; rKnee.name = @"rKnee"; rKnee.position = SCNVector3Make(0.17, 0.45, -0.04); [dummyRoot addChildNode:rKnee];
+    SCNNode *rFoot = [SCNNode node]; rFoot.name = @"rFoot"; rFoot.position = SCNVector3Make(0.18, 0.08, -0.1); [dummyRoot addChildNode:rFoot];
 
     [_scnView.scene.rootNode addChildNode:dummyRoot];
 
-    // Animate Dummy Patrol / Movement
+    // Patrol Animation
     if (std::fabs(patrolOffset) > 0.1f) {
         SCNAction *moveRight = [SCNAction moveByX:patrolOffset y:0 z:0 duration:3.0];
         moveRight.timingMode = SCNActionTimingModeEaseInEaseOut;
@@ -422,33 +396,40 @@ struct DummyTarget {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
 
-    // Apply sleek Dark Modern styling
-    ImGui::StyleColorsDark();
+    // Apply exact OXSAK Orange Cyberpunk Theme (#101014, #15151B, #20202B, #FF8A00)
     ImGuiStyle &style = ImGui::GetStyle();
-    style.WindowRounding = 10.0f;
-    style.FrameRounding = 6.0f;
-    style.PopupRounding = 8.0f;
+    style.WindowRounding    = 12.0f;
+    style.FrameRounding     = 8.0f;
+    style.PopupRounding     = 8.0f;
     style.ScrollbarRounding = 9.0f;
-    style.GrabRounding = 6.0f;
-    style.TabRounding = 6.0f;
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 0.5f;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.10f, 0.14f, 0.90f);
-    style.Colors[ImGuiCol_Border] = ImVec4(0.0f, 0.8f, 1.0f, 0.45f);
-    style.Colors[ImGuiCol_Header] = ImVec4(0.12f, 0.35f, 0.55f, 0.80f);
-    style.Colors[ImGuiCol_Button] = ImVec4(0.15f, 0.38f, 0.60f, 0.85f);
-    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.20f, 0.50f, 0.78f, 1.0f);
-    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.95f, 1.0f, 1.0f);
-    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.0f, 0.85f, 1.0f, 1.0f);
+    style.GrabRounding      = 8.0f;
+    style.ChildRounding     = 10.0f;
+    style.WindowBorderSize  = 1.2f;
+    style.FrameBorderSize   = 0.0f;
+
+    style.Colors[ImGuiCol_WindowBg]         = ImVec4(0.063f, 0.063f, 0.078f, 0.96f); // #101014
+    style.Colors[ImGuiCol_Border]           = ImVec4(1.0f, 0.54f, 0.0f, 0.50f);      // #FF8A00 Border
+    style.Colors[ImGuiCol_FrameBg]          = ImVec4(0.125f, 0.125f, 0.168f, 1.00f); // #20202B
+    style.Colors[ImGuiCol_FrameBgHovered]   = ImVec4(0.18f, 0.18f, 0.24f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive]    = ImVec4(0.22f, 0.22f, 0.30f, 1.00f);
+    style.Colors[ImGuiCol_Button]           = ImVec4(0.125f, 0.125f, 0.168f, 0.90f);
+    style.Colors[ImGuiCol_ButtonHovered]    = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+    style.Colors[ImGuiCol_ButtonActive]     = ImVec4(1.0f, 0.54f, 0.0f, 0.85f);
+    style.Colors[ImGuiCol_CheckMark]        = ImVec4(1.0f, 0.54f, 0.0f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab]       = ImVec4(1.0f, 0.54f, 0.0f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1.0f, 0.70f, 0.28f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0.08f, 0.08f, 0.10f, 0.60f);
+    style.Colors[ImGuiCol_ScrollbarGrab]    = ImVec4(1.0f, 0.54f, 0.0f, 0.65f);
+    style.Colors[ImGuiCol_Text]             = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 
     ImGui_ImplMetal_Init(_device);
 }
 
 - (void)setupFloatingButton
 {
-    CGFloat btnSize = 56.0f;
-    CGRect frame = CGRectMake(self.view.bounds.size.width - btnSize - 16.0f, 48.0f, btnSize, btnSize);
-    _floatingButton = [[FloatingESPButton alloc] initWithFrame:frame];
+    CGFloat btnSize = 58.0f;
+    CGRect frame = CGRectMake(self.view.bounds.size.width - btnSize - 16.0f, 44.0f, btnSize, btnSize);
+    _floatingButton = [[FloatingOXSAKButton alloc] initWithFrame:frame];
     _floatingButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin;
     [_floatingButton addTarget:self action:@selector(toggleMenu) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:_floatingButton];
@@ -456,17 +437,17 @@ struct DummyTarget {
 
 - (void)setupCameraGestures
 {
-    // Double tap with 2 fingers to toggle menu
+    // Double-tap with 2 fingers to toggle menu
     UITapGestureRecognizer *doubleTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(toggleMenu)];
     doubleTap.numberOfTapsRequired = 2;
     doubleTap.numberOfTouchesRequired = 2;
     [self.view addGestureRecognizer:doubleTap];
 
-    // Pan to orbit camera
+    // Pan to orbit 3D camera
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleCameraPan:)];
     [self.view addGestureRecognizer:pan];
 
-    // Pinch to zoom camera
+    // Pinch to zoom 3D camera
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(handleCameraPinch:)];
     [self.view addGestureRecognizer:pinch];
 }
@@ -532,33 +513,12 @@ struct DummyTarget {
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event { [self updateIOWithTouchEvent:event]; }
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event { [self updateIOWithTouchEvent:event]; }
 
-#pragma mark - Color Picker Helper
-
-static void RenderColorButton(const char *name, ImVec4 &color)
-{
-    ImGui::PushID(name);
-    if (ImGui::ColorButton("##btn", color, ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(40, 24))) {
-        ImGui::OpenPopup("ColorPopup");
-    }
-    if (ImGui::BeginPopup("ColorPopup")) {
-        ImGui::Text("Select Color: %s", name);
-        ImGui::Separator();
-        ImGui::ColorPicker4("##picker", (float*)&color, ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview);
-        ImGui::EndPopup();
-    }
-    ImGui::PopID();
-}
-
 #pragma mark - World To Screen Projector
 
 - (BOOL)projectWorldPos:(SCNVector3)worldPos toScreen:(ImVec2 &)outScreen distance:(float *)outDist
 {
     SCNVector3 projected = [_scnView projectPoint:worldPos];
-
-    // projected.z is normalized depth (0.0 = near plane, 1.0 = far plane)
-    if (projected.z <= 0.0f || projected.z >= 1.0f) {
-        return NO; // Behind camera
-    }
+    if (projected.z <= 0.0f || projected.z >= 1.0f) return NO;
 
     outScreen = ImVec2(projected.x, projected.y);
 
@@ -572,7 +532,99 @@ static void RenderColorButton(const char *name, ImVec4 &color)
     return YES;
 }
 
-#pragma mark - MTKView Delegate (Drawing Frame)
+#pragma mark - Custom UI Widgets (Matching Reference Layout)
+
+static bool ToggleSwitch(const char *label, bool *v)
+{
+    ImGuiWindow *window = ImGui::GetCurrentWindow();
+    if (window->SkipItems) return false;
+
+    float height = 24.0f;
+    float width = 46.0f;
+    float radius = height * 0.5f;
+
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    float avail_w = ImGui::GetContentRegionAvail().x;
+
+    // Label on Left
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(ImVec4(0.92f, 0.92f, 0.96f, 1.0f), "%s", label);
+
+    // Clickable toggle button on Right
+    ImGui::SameLine(avail_w - width);
+    std::string btn_id = std::string("##switch_") + label;
+    bool pressed = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(width, height));
+    if (pressed) {
+        *v = !(*v);
+    }
+
+    ImVec2 btn_min = ImGui::GetItemRectMin();
+    ImVec2 btn_max = ImGui::GetItemRectMax();
+
+    // Background pill (#FF8A00 when ON, #32323F when OFF)
+    ImU32 bg_col = *v ? ImColor(255, 138, 0, 255) : ImColor(50, 50, 63, 255);
+    window->DrawList->AddRectFilled(btn_min, btn_max, bg_col, radius);
+
+    // Sliding White Knob
+    float knob_radius = radius - 2.5f;
+    float t = *v ? 1.0f : 0.0f;
+    float knob_x = btn_min.x + radius + t * (width - 2.0f * radius);
+    ImVec2 knob_center(knob_x, btn_min.y + radius);
+
+    // Subtle drop shadow + knob
+    window->DrawList->AddCircleFilled(ImVec2(knob_center.x, knob_center.y + 1.0f), knob_radius, ImColor(0, 0, 0, 90), 16);
+    window->DrawList->AddCircleFilled(knob_center, knob_radius, ImColor(255, 255, 255, 255), 16);
+
+    return pressed;
+}
+
+static bool TuningSlider(const char *label, float *v, float v_min, float v_max, const char *unit_fmt = "%.1f")
+{
+    char val_buf[32];
+    snprintf(val_buf, sizeof(val_buf), unit_fmt, *v);
+
+    // Label on left, Value on right
+    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.92f, 1.0f), "%s", label);
+    float val_w = ImGui::CalcTextSize(val_buf).x;
+    float avail_w = ImGui::GetContentRegionAvail().x;
+    ImGui::SameLine(avail_w - val_w);
+    ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", val_buf);
+
+    // Horizontal slider track
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.18f, 0.18f, 0.24f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.54f, 0.0f, 1.0f)); // #FF8A00
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(1.0f, 0.70f, 0.28f, 1.0f));
+    ImGui::PushItemWidth(-1.0f);
+    std::string slider_id = std::string("##slider_") + label;
+    bool changed = ImGui::SliderFloat(slider_id.c_str(), v, v_min, v_max, "");
+    ImGui::PopItemWidth();
+    ImGui::PopStyleColor(4);
+
+    return changed;
+}
+
+static void BeginCard(const char *title, float height = 0.0f)
+{
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.125f, 0.125f, 0.168f, 0.85f)); // #20202B
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+    ImGui::BeginChild(title, ImVec2(0.0f, height), true, ImGuiWindowFlags_None);
+
+    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), ":: %s", title);
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+}
+
+static void EndCard()
+{
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+}
+
+#pragma mark - MTKView Delegate
 
 - (void)drawInMTKView:(MTKView *)view
 {
@@ -592,22 +644,49 @@ static void RenderColorButton(const char *name, ImVec4 &color)
     ImGui_ImplMetal_NewFrame(renderPass);
     ImGui::NewFrame();
 
-    // 1. Draw ESP Visuals (Bone Skeleton, Boxes, Lines, Distance)
-    if (g_Settings.bMasterESP) {
+    // 1. Draw ESP Telemetry Overlays
+    if (g_State.bEnableESP) {
         [self drawESPOverlays];
     }
 
-    // 2. Draw Center Aim FOV Circle
-    if (g_Settings.bFOVCircle) {
+    // 2. Draw Aim FOV Circle & Lock Line
+    if (g_State.bEnableAim) {
         ImDrawList *drawList = ImGui::GetBackgroundDrawList();
         ImVec2 center(io.DisplaySize.x / 2.0f, io.DisplaySize.y / 2.0f);
-        drawList->AddCircle(center, g_Settings.fovRadius, ImColor(g_Settings.fovColor), 48, 1.5f);
-        drawList->AddCircle(center, 2.5f, ImColor(0.0f, 0.95f, 1.0f, 1.0f), 12, 2.0f); // Center crosshair dot
+        drawList->AddCircle(center, g_State.fovRadius, ImColor(g_State.colFOV), 48, 1.8f);
+        drawList->AddCircle(center, 2.5f, ImColor(g_State.colPrimaryOrange), 12, 2.0f);
+
+        // Find closest target to aim circle for lock visualization
+        if (g_State.bLockLine && !_dummies.empty()) {
+            float closestDist = 9999.0f;
+            ImVec2 targetScreen;
+            bool found = false;
+
+            for (const auto &d : _dummies) {
+                SCNNode *head = [d.rootNode.presentationNode childNodeWithName:@"head" recursively:YES];
+                SCNVector3 headWorld = head ? [head convertPosition:SCNVector3Zero toNode:nil] : SCNVector3Zero;
+                ImVec2 s;
+                if ([self projectWorldPos:headWorld toScreen:s distance:nil]) {
+                    float dX = s.x - center.x;
+                    float dY = s.y - center.y;
+                    float screenDist = sqrtf(dX * dX + dY * dY);
+                    if (screenDist < g_State.fovRadius && screenDist < closestDist) {
+                        closestDist = screenDist;
+                        targetScreen = s;
+                        found = true;
+                    }
+                }
+            }
+
+            if (found) {
+                drawList->AddLine(center, targetScreen, ImColor(g_State.colPrimaryOrange), 1.5f);
+            }
+        }
     }
 
-    // 3. Render Modern Floating Debug Menu
+    // 3. Render Modern OXSAK Interface
     if (g_ShowMenu) {
-        [self renderDebugMenu];
+        [self renderOXSAKMenu];
     }
 
     ImGui::Render();
@@ -620,7 +699,7 @@ static void RenderColorButton(const char *name, ImVec4 &color)
 
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {}
 
-#pragma mark - ESP Visual Rendering Engine
+#pragma mark - ESP Visual Rendering
 
 - (void)drawESPOverlays
 {
@@ -633,18 +712,17 @@ static void RenderColorButton(const char *name, ImVec4 &color)
         SCNNode *rootNode = dummy.rootNode.presentationNode;
         SCNVector3 rootWorld = [rootNode convertPosition:SCNVector3Zero toNode:nil];
 
-        // Project feet and head
         ImVec2 feetScr, headScr;
         float distance = 0.0f;
         if (![self projectWorldPos:rootWorld toScreen:feetScr distance:&distance]) continue;
-        if (![self projectWorldPos:SCNVector3Make(rootWorld.x, rootWorld.y + g_Settings.headOffset, rootWorld.z) toScreen:headScr distance:nil]) continue;
+        if (![self projectWorldPos:SCNVector3Make(rootWorld.x, rootWorld.y + g_State.headOffset, rootWorld.z) toScreen:headScr distance:nil]) continue;
 
         float topY = fminf(feetScr.y, headScr.y);
         float botY = fmaxf(feetScr.y, headScr.y);
         float height = botY - topY;
         if (height < 4.0f) continue;
 
-        float width = height * g_Settings.boxWidthScale;
+        float width = height * g_State.boxWidthScale;
         float halfW = width / 2.0f;
         float centerX = (feetScr.x + headScr.x) / 2.0f;
 
@@ -652,24 +730,21 @@ static void RenderColorButton(const char *name, ImVec4 &color)
         ImVec2 boxMax(centerX + halfW, botY);
 
         // 1. 2D Bounding Box
-        if (g_Settings.bBox) {
+        if (g_State.bBox) {
             drawList->AddRect(boxMin, boxMax, ImColor(0, 0, 0, 220), 0.0f, 0, 3.0f);
-            drawList->AddRect(boxMin, boxMax, ImColor(g_Settings.boxColor), 0.0f, 0, 1.5f);
+            drawList->AddRect(boxMin, boxMax, ImColor(g_State.colBox), 0.0f, 0, 1.5f);
         }
 
-        // 2. Snaplines (from bottom center of screen to dummy feet)
-        if (g_Settings.bSnaplines) {
-            drawList->AddLine(ImVec2(screenMidX, screenBottomY), ImVec2(centerX, botY), ImColor(g_Settings.lineColor), 1.5f);
+        // 2. Snaplines
+        if (g_State.bSnaplines) {
+            drawList->AddLine(ImVec2(screenMidX, screenBottomY), ImVec2(centerX, botY), ImColor(g_State.colSnapline), 1.5f);
         }
 
-        // 3. 15-Joint Humanoid Bone Skeleton ESP
-        if (g_Settings.bSkeleton) {
-            // Helper lambda to fetch world position of a named bone node
+        // 3. 15-Joint Humanoid Bone Skeleton
+        if (g_State.bSkeleton) {
             auto GetBoneWorld = [&](NSString *boneName) -> SCNVector3 {
                 SCNNode *bNode = [rootNode childNodeWithName:boneName recursively:YES];
-                if (bNode) {
-                    return [bNode convertPosition:SCNVector3Zero toNode:nil];
-                }
+                if (bNode) return [bNode convertPosition:SCNVector3Zero toNode:nil];
                 return rootWorld;
             };
 
@@ -678,7 +753,7 @@ static void RenderColorButton(const char *name, ImVec4 &color)
                 if ([self projectWorldPos:GetBoneWorld(b1) toScreen:s1 distance:nil] &&
                     [self projectWorldPos:GetBoneWorld(b2) toScreen:s2 distance:nil]) {
                     drawList->AddLine(s1, s2, ImColor(0, 0, 0, 220), 3.0f);
-                    drawList->AddLine(s1, s2, ImColor(g_Settings.skeletonColor), 1.8f);
+                    drawList->AddLine(s1, s2, ImColor(g_State.colSkeleton), 1.8f);
                 }
             };
 
@@ -687,10 +762,10 @@ static void RenderColorButton(const char *name, ImVec4 &color)
             if ([self projectWorldPos:GetBoneWorld(@"head") toScreen:headCenter distance:nil]) {
                 float headRadius = fmaxf(4.0f, height * 0.07f);
                 drawList->AddCircle(headCenter, headRadius, ImColor(0, 0, 0, 220), 16, 3.0f);
-                drawList->AddCircle(headCenter, headRadius, ImColor(g_Settings.skeletonColor), 16, 1.8f);
+                drawList->AddCircle(headCenter, headRadius, ImColor(g_State.colSkeleton), 16, 1.8f);
             }
 
-            // Torso & Spine
+            // Spine & Torso
             DrawBoneLine(@"head", @"neck");
             DrawBoneLine(@"neck", @"spine");
             DrawBoneLine(@"spine", @"pelvis");
@@ -714,8 +789,8 @@ static void RenderColorButton(const char *name, ImVec4 &color)
             DrawBoneLine(@"rKnee", @"rFoot");
         }
 
-        // 4. Health Bar (Vertical bar on left of box)
-        if (g_Settings.bHealth) {
+        // 4. Health Bar
+        if (g_State.bHealth) {
             float barW = 3.5f;
             float barMargin = 4.0f;
             ImVec2 bgMin(boxMin.x - barMargin - barW, boxMin.y);
@@ -725,12 +800,12 @@ static void RenderColorButton(const char *name, ImVec4 &color)
             float hpRatio = fmaxf(0.0f, fminf(1.0f, dummy.health / dummy.maxHealth));
             float barFillHeight = height * hpRatio;
             ImVec2 fillMin(bgMin.x, bgMax.y - barFillHeight);
-            ImVec4 hpColor = hpRatio > 0.5f ? ImVec4(0.0f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.2f, 0.0f, 1.0f);
-            drawList->AddRectFilled(fillMin, bgMax, ImColor(hpColor));
+            ImVec4 hpCol = hpRatio > 0.5f ? ImVec4(0.0f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.2f, 0.0f, 1.0f);
+            drawList->AddRectFilled(fillMin, bgMax, ImColor(hpCol));
         }
 
-        // 5. Distance and Target Info Label
-        if (g_Settings.bDistance) {
+        // 5. Distance and Target Tag
+        if (g_State.bDistance) {
             char label[64];
             snprintf(label, sizeof(label), "%s [%.0fm]", dummy.name.c_str(), distance);
             ImVec2 textSize = ImGui::CalcTextSize(label);
@@ -742,113 +817,243 @@ static void RenderColorButton(const char *name, ImVec4 &color)
     }
 }
 
-#pragma mark - Modern Debug ImGui Menu
+#pragma mark - OXSAK Modern Mobile Interface (Exact Match to Design Reference)
 
-- (void)renderDebugMenu
+- (void)renderOXSAKMenu
 {
     CGFloat screenW = self.view.bounds.size.width;
     CGFloat screenH = self.view.bounds.size.height;
-    CGFloat menuW = fminf(380.0f, screenW - 30.0f);
-    CGFloat menuH = fminf(320.0f, screenH - 60.0f);
+
+    // Responsive sizing matching reference proportions
+    CGFloat menuW = fminf(720.0f, screenW - 24.0f);
+    CGFloat menuH = fminf(380.0f, screenH - 24.0f);
 
     ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2((screenW - menuW) / 2.0f, 50.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2((screenW - menuW) / 2.0f, (screenH - menuH) / 2.0f), ImGuiCond_FirstUseEver);
 
-    if (ImGui::Begin("ESP 3D Studio Telemetry", &g_ShowMenu, ImGuiWindowFlags_NoCollapse)) {
-        if (ImGui::BeginTabBar("MainTabs")) {
-            
-            // TAB 1: ESP Visuals
-            if (ImGui::BeginTabItem("ESP Settings")) {
-                ImGui::Spacing();
-                ImGui::Checkbox("Master ESP", &g_Settings.bMasterESP);
-                ImGui::Separator();
+    ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar;
 
-                ImGui::Checkbox("15-Joint Skeleton ESP", &g_Settings.bSkeleton);
-                ImGui::SameLine(220);
-                RenderColorButton("Skeleton", g_Settings.skeletonColor);
+    if (ImGui::Begin("OXSAK_ROOT", &g_ShowMenu, winFlags)) {
+        
+        // =================================================================================
+        // 1. LEFT VERTICAL SIDEBAR (#15151B)
+        // =================================================================================
+        float sidebarW = 160.0f;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f)); // #15151B
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0.0f), false);
 
-                ImGui::Checkbox("2D Bounding Box", &g_Settings.bBox);
-                ImGui::SameLine(220);
-                RenderColorButton("Box", g_Settings.boxColor);
+        // Sidebar Logo / Title Header
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "0xSAK");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.95f, 1.0f), "IOS");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
 
-                ImGui::Checkbox("Snaplines", &g_Settings.bSnaplines);
-                ImGui::SameLine(220);
-                RenderColorButton("Line", g_Settings.lineColor);
+        // Vertical Navigation Tabs
+        const char *tabs[] = { "Aimbot", "ESP", "Misc", "Settings" };
+        const char *icons[] = { "(+)", "[#]", "{*}", "[=]" };
 
-                ImGui::Checkbox("Distance & Target Tags", &g_Settings.bDistance);
-                ImGui::Checkbox("Health Bars", &g_Settings.bHealth);
-
-                ImGui::Separator();
-                ImGui::TextColored(ImVec4(0.0f, 0.85f, 1.0f, 1.0f), "Box Calibration");
-                ImGui::SliderFloat("Head Offset", &g_Settings.headOffset, 1.0f, 2.5f, "%.2f m");
-                ImGui::SliderFloat("Width Scale", &g_Settings.boxWidthScale, 0.2f, 0.8f, "%.2f");
-
-                ImGui::EndTabItem();
+        for (int i = 0; i < 4; i++) {
+            bool isActive = (g_State.currentTab == i);
+            if (isActive) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.85f)); // Orange active pill
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent inactive
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.60f, 0.68f, 1.0f));
             }
 
-            // TAB 2: Aim Assist & FOV
-            if (ImGui::BeginTabItem("Aim & FOV")) {
-                ImGui::Spacing();
-                ImGui::Checkbox("Draw FOV Circle", &g_Settings.bFOVCircle);
-                ImGui::SameLine(220);
-                RenderColorButton("FOV", g_Settings.fovColor);
-
-                ImGui::SliderFloat("FOV Radius", &g_Settings.fovRadius, 30.0f, 350.0f, "%.0f px");
-
-                ImGui::Separator();
-                ImGui::TextColored(ImVec4(0.0f, 0.85f, 1.0f, 1.0f), "Aim Assist Telemetry");
-                ImGui::Text("Target Bone: Head (Joint 4)");
-                ImGui::Text("Aim Smoothing: 0.15 (Dynamic)");
-                ImGui::Text("Gesture: Swipe 1 finger to orbit 3D camera");
-                ImGui::Text("Zoom: Pinch with 2 fingers to zoom");
-
-                ImGui::EndTabItem();
+            char tabLabel[64];
+            snprintf(tabLabel, sizeof(tabLabel), "%s  %s", icons[i], tabs[i]);
+            if (ImGui::Button(tabLabel, ImVec2(-1.0f, 38.0f))) {
+                g_State.currentTab = i;
             }
 
-            // TAB 3: Telemetry & Inspector
-            if (ImGui::BeginTabItem("Entities & Diagnostics")) {
-                ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Live Targets in Scene: %zu", _dummies.size());
-                ImGui::Separator();
-
-                for (size_t i = 0; i < _dummies.size(); i++) {
-                    const auto &d = _dummies[i];
-                    SCNVector3 pos = [d.rootNode.presentationNode convertPosition:SCNVector3Zero toNode:nil];
-                    ImGui::Text("[%zu] %s: (%.1f, %.1f, %.1f) - %.0f HP", i + 1, d.name.c_str(), pos.x, pos.y, pos.z, d.health);
-                }
-
-                ImGui::Separator();
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Engine Telemetry");
-                ImGui::Text("Framerate: %.1f FPS", ImGui::GetIO().Framerate);
-                ImGui::Text("Screen Size: %.0f x %.0f", ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-                ImGui::Text("Camera Distance: %.1fm", _cameraDistance);
-
-                ImGui::EndTabItem();
-            }
-
-            // TAB 4: Instructions
-            if (ImGui::BeginTabItem("Controls")) {
-                ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.0f, 0.85f, 1.0f, 1.0f), "Mobile Gesture Shortcuts:");
-                ImGui::BulletText("Tap 'ESP' Floating Badge to open/close menu");
-                ImGui::BulletText("Drag 'ESP' Badge to move it anywhere");
-                ImGui::BulletText("Double-tap with 2 fingers to toggle menu");
-                ImGui::BulletText("Drag 1 finger anywhere to orbit 3D camera");
-                ImGui::BulletText("Pinch 2 fingers to zoom camera in/out");
-
-                ImGui::Spacing();
-                if (ImGui::Button("Close Menu", ImVec2(120, 32))) {
-                    g_ShowMenu = false;
-                }
-
-                ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
+            ImGui::PopStyleColor(2);
+            ImGui::Spacing();
         }
+
+        // Bottom [X] Close Button
+        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 48.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.15f, 0.15f, 0.20f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+        if (ImGui::Button("X  Close", ImVec2(-1.0f, 34.0f))) {
+            g_ShowMenu = false;
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+
+        // =================================================================================
+        // 2. MAIN CONTENT AREA (Next to Sidebar)
+        // =================================================================================
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+
+        // Top Horizontal Sub-Tabs Bar
+        ImGui::Spacing();
+        if (g_State.currentTab == 0) {
+            // Aimbot & Silent Aim Subtabs
+            bool sub1 = (g_State.currentSubTab == 0);
+            if (sub1) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.70f, 0.28f, 1.0f));
+            else      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.65f, 1.0f));
+            if (ImGui::Button("Aimbot (!)", ImVec2(120, 28))) g_State.currentSubTab = 0;
+            ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+            bool sub2 = (g_State.currentSubTab == 1);
+            if (sub2) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.70f, 0.28f, 1.0f));
+            else      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.65f, 1.0f));
+            if (ImGui::Button("Silent Aim (!)", ImVec2(130, 28))) g_State.currentSubTab = 1;
+            ImGui::PopStyleColor();
+        } else if (g_State.currentTab == 1) {
+            ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Visuals & ESP Overlay");
+        } else if (g_State.currentTab == 2) {
+            ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Diagnostics & Telemetry");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Settings & Preferences");
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Two-Column Content Area (Matching Reference Layout)
+        float contentW = ImGui::GetContentRegionAvail().x;
+        float colW = (contentW - 12.0f) * 0.5f;
+
+        // ---------------------------------------------------------------------------------
+        // TAB 0: AIMBOT / SILENT AIM (Two-Column Layout)
+        // ---------------------------------------------------------------------------------
+        if (g_State.currentTab == 0) {
+            // Left Column: Toggles
+            ImGui::BeginChild("AimLeftCol", ImVec2(colW, 0.0f), false);
+            
+            BeginCard("Aimbot", 165.0f);
+            ToggleSwitch("Enable Aim", &g_State.bEnableAim);
+            ImGui::Spacing();
+            ToggleSwitch("Visible Only", &g_State.bVisibleOnly);
+            ImGui::Spacing();
+            ToggleSwitch("Ignore Team", &g_State.bIgnoreTeam);
+            ImGui::Spacing();
+            ToggleSwitch("Sticky", &g_State.bSticky);
+            EndCard();
+
+            ImGui::Spacing();
+            BeginCard("Behavior", 0.0f);
+            ToggleSwitch("Auto Shoot", &g_State.bAutoShoot);
+            ImGui::Spacing();
+            ToggleSwitch("Draw FOV Circle", &g_State.bLockLine);
+            EndCard();
+
+            ImGui::EndChild();
+
+            // Right Column: Sliders & Tuning
+            ImGui::SameLine();
+            ImGui::BeginChild("AimRightCol", ImVec2(colW, 0.0f), false);
+
+            BeginCard("Tuning", 0.0f);
+            TuningSlider("FOV", &g_State.fovRadius, 10.0f, 300.0f, "%.0f");
+            ImGui::Spacing();
+            TuningSlider("Smoothness", &g_State.smoothness, 1.0f, 30.0f, "%.1f");
+            ImGui::Spacing();
+            TuningSlider("Max Turn", &g_State.maxTurn, 0.0f, 180.0f, "%.1f");
+            ImGui::Spacing();
+            TuningSlider("Reaction", &g_State.reactionMs, 0.0f, 500.0f, "%.0fms");
+            ImGui::Spacing();
+            TuningSlider("Jitter", &g_State.jitter, 0.0f, 0.5f, "%.2f");
+            EndCard();
+
+            ImGui::EndChild();
+        }
+
+        // ---------------------------------------------------------------------------------
+        // TAB 1: ESP OVERLAYS (Two-Column Layout)
+        // ---------------------------------------------------------------------------------
+        else if (g_State.currentTab == 1) {
+            ImGui::BeginChild("ESPLeftCol", ImVec2(colW, 0.0f), false);
+
+            BeginCard("Visuals", 0.0f);
+            ToggleSwitch("Master ESP", &g_State.bEnableESP);
+            ImGui::Spacing();
+            ToggleSwitch("15-Joint Skeleton", &g_State.bSkeleton);
+            ImGui::Spacing();
+            ToggleSwitch("2D Bounding Box", &g_State.bBox);
+            ImGui::Spacing();
+            ToggleSwitch("Snaplines", &g_State.bSnaplines);
+            ImGui::Spacing();
+            ToggleSwitch("Distance Tags", &g_State.bDistance);
+            ImGui::Spacing();
+            ToggleSwitch("Health Bars", &g_State.bHealth);
+            EndCard();
+
+            ImGui::EndChild();
+
+            ImGui::SameLine();
+            ImGui::BeginChild("ESPRightCol", ImVec2(colW, 0.0f), false);
+
+            BeginCard("Calibration", 0.0f);
+            TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
+            ImGui::Spacing();
+            TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
+            ImGui::Spacing();
+            ImGui::Text("Active Target Count: %zu", _dummies.size());
+            ImGui::Text("Skeleton Joints: 15 Bones Active");
+            EndCard();
+
+            ImGui::EndChild();
+        }
+
+        // ---------------------------------------------------------------------------------
+        // TAB 2: MISC & TELEMETRY
+        // ---------------------------------------------------------------------------------
+        else if (g_State.currentTab == 2) {
+            ImGui::BeginChild("MiscCol", ImVec2(0.0f, 0.0f), false);
+
+            BeginCard("Scene Targets & Coordinates", 0.0f);
+            for (size_t i = 0; i < _dummies.size(); i++) {
+                const auto &d = _dummies[i];
+                SCNVector3 pos = [d.rootNode.presentationNode convertPosition:SCNVector3Zero toNode:nil];
+                ImGui::Text("[%zu] %s: (%.1f, %.1f, %.1f) - %.0f HP", i + 1, d.name.c_str(), pos.x, pos.y, pos.z, d.health);
+            }
+            ImGui::Separator();
+            ImGui::Text("Framerate: %.1f FPS", ImGui::GetIO().Framerate);
+            ImGui::Text("Display Size: %.0f x %.0f", ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
+            ImGui::Text("Camera Distance: %.1fm", _cameraDistance);
+            EndCard();
+
+            ImGui::EndChild();
+        }
+
+        // ---------------------------------------------------------------------------------
+        // TAB 3: SETTINGS
+        // ---------------------------------------------------------------------------------
+        else if (g_State.currentTab == 3) {
+            ImGui::BeginChild("SettingsCol", ImVec2(0.0f, 0.0f), false);
+
+            BeginCard("OXSAK Mobile Preferences", 0.0f);
+            ImGui::BulletText("Tap 0xSAK Floating Badge to toggle menu");
+            ImGui::BulletText("Drag 0xSAK Badge to relocate anywhere");
+            ImGui::BulletText("Double-tap with 2 fingers anywhere to toggle");
+            ImGui::BulletText("Swipe 1 finger to orbit 3D simulation camera");
+            ImGui::BulletText("Pinch 2 fingers to zoom camera in and out");
+            ImGui::Spacing();
+            if (ImGui::Button("Reset Badge Position", ImVec2(180, 32))) {
+                _floatingButton.center = CGPointMake(self.view.bounds.size.width - 45.0, 75.0);
+            }
+            EndCard();
+
+            ImGui::EndChild();
+        }
+
+        ImGui::EndGroup();
     }
     ImGui::End();
 }
 
 @end
-
