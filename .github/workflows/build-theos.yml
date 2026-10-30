@@ -134,7 +134,7 @@ jobs:
           mkdir -p Payload/ESP3DDemo.app
           xcrun -sdk iphoneos clang++ -arch arm64 -std=c++17 -stdlib=libc++ -fobjc-arc -mios-version-min=15.0 \
             -I. -I./IMGUI \
-            StandaloneDemo/main.m \
+            StandaloneDemo/main.mm \
             StandaloneDemo/SceneViewController.mm \
             IMGUI/imgui.cpp \
             IMGUI/imgui_draw.cpp \
