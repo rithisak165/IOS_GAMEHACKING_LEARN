@@ -2,9 +2,112 @@
 #import <UIKit/UIKit.h>
 #import "ImGuiLoad.h"
 #import "ImGuiDrawView.h"
+#import "oxsak_badge_data.h"
+
+// =========================================================================
+// Floating OXSAK Launcher Button
+// 56x56 pt circular badge with glowing orange border and skull logo
+// Draggable, screen bounds clamped, position persisted to NSUserDefaults
+// =========================================================================
+@interface FloatingOXSAKButton : UIView
+@property (nonatomic, copy) void (^onTap)(void);
+@property (nonatomic, strong) UIImageView *badgeImageView;
+@end
+
+@implementation FloatingOXSAKButton {
+    CGPoint _viewStart;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.backgroundColor = [UIColor colorWithRed:0.063f green:0.063f blue:0.078f alpha:0.95f]; // #101014
+        self.layer.cornerRadius = frame.size.width / 2.0f;
+        self.layer.masksToBounds = NO;
+        self.layer.borderColor = [UIColor colorWithRed:1.0f green:0.54f blue:0.0f alpha:1.0f].CGColor; // #FF8A00
+        self.layer.borderWidth = 2.0f;
+        
+        // Glowing orange outer shadow
+        self.layer.shadowColor = [UIColor colorWithRed:1.0f green:0.54f blue:0.0f alpha:0.85f].CGColor;
+        self.layer.shadowOffset = CGSizeMake(0, 0);
+        self.layer.shadowRadius = 8.0f;
+        self.layer.shadowOpacity = 0.85f;
+        
+        // Embedded OXSAK logo badge image view
+        _badgeImageView = [[UIImageView alloc] initWithFrame:CGRectInset(self.bounds, 4, 4)];
+        _badgeImageView.contentMode = UIViewContentModeScaleAspectFit;
+        _badgeImageView.layer.cornerRadius = (frame.size.width - 8) / 2.0f;
+        _badgeImageView.layer.masksToBounds = YES;
+        
+        // Decode base64 emblem data
+        NSData *imageData = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:g_OXSAKBadgeBase64]
+                                                                options:NSDataBase64DecodingIgnoreUnknownCharacters];
+        if (imageData) {
+            _badgeImageView.image = [UIImage imageWithData:imageData];
+        }
+        [self addSubview:_badgeImageView];
+        
+        // Drag (pan) gesture
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
+        [self addGestureRecognizer:pan];
+        
+        // Tap gesture
+        UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
+        [self addGestureRecognizer:tap];
+    }
+    return self;
+}
+
+- (void)handleTap:(UITapGestureRecognizer *)tap {
+    // Subtle bounce feedback
+    [UIView animateWithDuration:0.1 animations:^{
+        self.transform = CGAffineTransformMakeScale(0.92f, 0.92f);
+    } completion:^(BOOL finished) {
+        [UIView animateWithDuration:0.1 animations:^{
+            self.transform = CGAffineTransformIdentity;
+        }];
+    }];
+    
+    if (self.onTap) {
+        self.onTap();
+    }
+}
+
+- (void)handlePan:(UIPanGestureRecognizer *)pan {
+    UIWindow *window = self.window ?: [PubgLoad findKeyWindow];
+    if (!window) return;
+    
+    CGPoint translation = [pan translationInView:window];
+    if (pan.state == UIGestureRecognizerStateBegan) {
+        _viewStart = self.center;
+    } else if (pan.state == UIGestureRecognizerStateChanged) {
+        self.center = CGPointMake(_viewStart.x + translation.x, _viewStart.y + translation.y);
+    } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
+        CGRect screenBounds = window.bounds;
+        CGFloat radius = self.frame.size.width / 2.0f;
+        CGFloat minX = 12.0f + radius;
+        CGFloat maxX = screenBounds.size.width - 12.0f - radius;
+        CGFloat minY = 24.0f + radius;
+        CGFloat maxY = screenBounds.size.height - 24.0f - radius;
+        
+        CGPoint finalCenter = self.center;
+        finalCenter.x = MAX(minX, MIN(maxX, finalCenter.x));
+        finalCenter.y = MAX(minY, MIN(maxY, finalCenter.y));
+        
+        [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
+            self.center = finalCenter;
+        } completion:^(BOOL finished) {
+            [[NSUserDefaults standardUserDefaults] setFloat:finalCenter.x forKey:@"OXSAK_Launcher_X"];
+            [[NSUserDefaults standardUserDefaults] setFloat:finalCenter.y forKey:@"OXSAK_Launcher_Y"];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+        }];
+    }
+}
+@end
 
 @interface PubgLoad ()
 @property (nonatomic, strong) ImGuiDrawView *vna;
+@property (nonatomic, strong) FloatingOXSAKButton *floatingButton;
 @property (nonatomic, assign) BOOL isMenuOpen;
 @property (nonatomic, strong) NSTimer *attachTimer;
 @end
@@ -58,40 +161,68 @@ static PubgLoad *g_SharedInstance = nil;
     _isMenuOpen = YES;
     [ImGuiDrawView showChange:YES];
 
-    // Try attaching immediately
+    [self setupFloatingButton];
     [self tryAttachView];
 
-    // Keep checking every 1 second until the overlay view is successfully added to the screen
+    // Keep checking until the overlay view is successfully attached to the hierarchy
     self.attachTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
                                                         target:self
                                                       selector:@selector(tryAttachView)
                                                       userInfo:nil
                                                        repeats:YES];
 
-    // Add gesture recognizer to toggle menu (Double-tap with 2 fingers)
     [self setupGesture];
+}
+
+- (void)setupFloatingButton
+{
+    if (_floatingButton) return;
+    
+    // Restore cached position from NSUserDefaults or use safe default
+    CGFloat x = [[NSUserDefaults standardUserDefaults] floatForKey:@"OXSAK_Launcher_X"];
+    CGFloat y = [[NSUserDefaults standardUserDefaults] floatForKey:@"OXSAK_Launcher_Y"];
+    if (x <= 10.0f || y <= 10.0f) {
+        x = 45.0f;
+        y = 120.0f;
+    }
+    
+    _floatingButton = [[FloatingOXSAKButton alloc] initWithFrame:CGRectMake(0, 0, 56, 56)];
+    _floatingButton.center = CGPointMake(x, y);
+    
+    __weak PubgLoad *weakSelf = self;
+    _floatingButton.onTap = ^{
+        [weakSelf toggleMenu];
+    };
 }
 
 - (void)tryAttachView
 {
     UIWindow *window = [PubgLoad findKeyWindow];
     if (window) {
-        if (window.rootViewController && window.rootViewController.view) {
-            if (_vna.view.superview != window.rootViewController.view) {
-                [_vna.view removeFromSuperview];
-                [window.rootViewController.view addSubview:_vna.view];
-                [window.rootViewController.view bringSubviewToFront:_vna.view];
-            }
-        } else {
-            if (_vna.view.superview != window) {
-                [_vna.view removeFromSuperview];
-                [window addSubview:_vna.view];
-                [window bringSubviewToFront:_vna.view];
-            }
+        UIView *targetContainer = (window.rootViewController && window.rootViewController.view) ? window.rootViewController.view : window;
+        
+        // Attach ImGui overlay view
+        if (_vna && _vna.view.superview != targetContainer) {
+            [_vna.view removeFromSuperview];
+            [targetContainer addSubview:_vna.view];
         }
         
-        // If view is attached and has non-zero size, we can slow down or stop the timer
-        if (_vna.view.superview && _vna.view.frame.size.width > 0) {
+        // Attach Floating OXSAK Button
+        if (_floatingButton && _floatingButton.superview != targetContainer) {
+            [_floatingButton removeFromSuperview];
+            [targetContainer addSubview:_floatingButton];
+        }
+        
+        // Ensure overlay and launcher are top-most
+        if (_vna && _vna.view.superview == targetContainer) {
+            [targetContainer bringSubviewToFront:_vna.view];
+        }
+        if (_floatingButton && _floatingButton.superview == targetContainer) {
+            [targetContainer bringSubviewToFront:_floatingButton];
+        }
+        
+        // Invalidate timer once attached
+        if (_vna.view.superview && _vna.view.frame.size.width > 0 && _floatingButton.superview) {
             [self.attachTimer invalidate];
             self.attachTimer = nil;
         }

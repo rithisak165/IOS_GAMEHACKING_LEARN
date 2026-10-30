@@ -13,6 +13,7 @@ build/
 # OS metadata
 .DS_Store
 Thumbs.db
+*.bak*
 
 
 StandaloneDemo_Backup/

@@ -3,14 +3,12 @@
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 #import <Foundation/Foundation.h>
-#import "Esp/ImGuiDrawView.h"
 #import "IMGUI/imgui.h"
 #import "IMGUI/imgui_internal.h"
 #import "IMGUI/imgui_impl_metal.h"
 #import "Esp/CaptainHook.h"
 #import "Esp/PubgLoad.h"
 #import "IMGUI/Honkai.h"
-//Patch library
 #import "5Toubun/NakanoIchika.h"
 #import "5Toubun/NakanoNino.h"
 #import "5Toubun/NakanoMiku.h"
@@ -23,30 +21,70 @@
 #include <deque>
 #include <vector>
 #include <fstream>
-
+#include <string>
 
 #include "Helper/Vector3.h"
 #include "Helper/Vector2.h"
 #include "Helper/Quaternion.h"
 #include "Helper/Monostring.h"
-#include <vector>
 #import <dlfcn.h>
 #include <map>
 
-#include <OpenGLES/ES2/gl.h>
-#include <OpenGLES/ES2/glext.h>
-
 #include <unistd.h>
 #import "Helper/Functions/UniversalESP.h"
+#include "fonts.h"
 
 #define kWidth [UIScreen mainScreen].bounds.size.width
 #define kHeight [UIScreen mainScreen].bounds.size.height
 #define kScale [UIScreen mainScreen].scale
-#define kTest   0 
-
 
 static bool MenDeal = true;
 
+// =========================================================================
+// OXSAK Visual State & Navigation (Isolated from Game Memory)
+// =========================================================================
+static int s_SelectedTab = 0;       // 0: AIMBOT, 1: SILENT AIM, 2: ESP, 3: MISC, 4: SETTINGS
+static int s_AimbotSubTab = 0;      // 0: Aimbot, 1: Silent Aim
+
+// Simulated Aimbot Telemetry Settings
+static bool s_AimEnable = false;
+static bool s_AimVisibleOnly = true;
+static bool s_AimIgnoreTeam = true;
+static bool s_AimSticky = false;
+static float s_AimFOV = 70.0f;
+static float s_AimSmoothness = 10.0f;
+static float s_AimMaxTurn = 45.0f;
+static float s_AimReaction = 20.0f;
+static float s_AimJitter = 0.07f;
+
+// Simulated Silent Aim Settings
+static bool s_SilentEnable = false;
+static bool s_SilentAutoFire = false;
+static bool s_SilentHitchanceCheck = true;
+static float s_SilentFOV = 40.0f;
+static float s_SilentHitchance = 85.0f;
+static int s_SilentTargetBone = 0; // 0: Head, 1: Chest
+
+// Visual ESP Configuration
+static bool s_ESPEnable = false;
+static bool s_ESPBox = true;
+static bool s_ESPLine = false;
+static bool s_ESPSkeleton = true;
+static bool s_ESPDistance = true;
+static bool s_ESPHealth = true;
+static float s_HeadOffset = 1.80f;
+static float s_FeetOffset = 0.10f;
+static float s_WidthScale = 0.60f;
+
+// Misc & System Diagnostics
+static bool s_ShowWatermark = true;
+static bool s_ShowCrosshair = false;
+static float s_MenuAlpha = 0.95f;
+
+// =========================================================================
+// Touch-Through Filter View
+// Only intercepts touches that land directly inside active ImGui windows
+// =========================================================================
 @interface ImGuiTouchView : MTKView
 @end
 
@@ -55,7 +93,7 @@ static bool MenDeal = true;
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event
 {
 	if (!MenDeal || !ImGui::GetCurrentContext()) {
-		return NO; // Pass touch through to the game when menu is closed
+		return NO; // Pass touch through to Polyfield when menu is closed
 	}
 
 	ImGuiContext *g = ImGui::GetCurrentContext();
@@ -78,10 +116,46 @@ static bool MenDeal = true;
 		return YES;
 	}
 
-	return NO; // Outside menu -> game receives the touch!
+	return NO; // Outside menu -> Polyfield receives the touch!
 }
 
 @end
+
+// =========================================================================
+// Custom iOS Toggle Switch Widget (#FF8A00 Active Orange)
+// =========================================================================
+static bool OXSAK_Toggle(const char* label, bool* v)
+{
+	ImVec2 p = ImGui::GetCursorScreenPos();
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	float height = 22.0f;
+	float width = 42.0f;
+	float radius = height * 0.5f;
+
+	ImGui::InvisibleButton(label, ImVec2(width, height));
+	if (ImGui::IsItemClicked()) {
+		*v = !(*v);
+	}
+
+	float t = *v ? 1.0f : 0.0f;
+	// #FF8A00 when ON, #20202B dark when OFF
+	ImU32 col_bg = *v ? IM_COL32(255, 138, 0, 240) : IM_COL32(36, 36, 48, 240);
+	draw_list->AddRectFilled(p, ImVec2(p.x + width, p.y + height), col_bg, radius);
+	
+	if (*v) {
+		// Amber subtle outer highlight
+		draw_list->AddRect(p, ImVec2(p.x + width, p.y + height), IM_COL32(255, 179, 71, 180), radius, 0, 1.0f);
+	} else {
+		draw_list->AddRect(p, ImVec2(p.x + width, p.y + height), IM_COL32(60, 60, 75, 180), radius, 0, 1.0f);
+	}
+
+	// White knob
+	draw_list->AddCircleFilled(ImVec2(p.x + radius + t * (width - 2.0f * radius), p.y + radius), radius - 2.5f, IM_COL32(255, 255, 255, 255));
+
+	ImGui::SameLine(0, 10.0f);
+	ImGui::TextUnformatted(label);
+	return *v;
+}
 
 @interface ImGuiDrawView () <MTKViewDelegate>
 @property(nonatomic, strong) id<MTLDevice> device;
@@ -90,12 +164,6 @@ static bool MenDeal = true;
 
 @implementation ImGuiDrawView
 
-ImFont *verdanab;
-ImFont *icons;
-ImFont *interb;
-ImFont *Urbanist;
-
-#define BundlePath @"/Library/PreferenceBundles/Tweak.bundle"
 - (instancetype)initWithNibName:(nullable NSString *)nibNameOrNil bundle:(nullable NSBundle *)nibBundleOrNil
 {
 	self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
@@ -111,17 +179,54 @@ ImFont *Urbanist;
 	ImGuiIO &io = ImGui::GetIO();
 	(void)io;
 
-	ImGui::StyleColorsDark();
-	auto &Style = ImGui::GetStyle();
+	// =========================================================================
+	// OXSAK Cyberpunk Orange & Charcoal Design System
+	// =========================================================================
+	ImGuiStyle &style = ImGui::GetStyle();
+	style.WindowRounding = 10.0f;
+	style.ChildRounding = 8.0f;
+	style.FrameRounding = 6.0f;
+	style.PopupRounding = 8.0f;
+	style.ScrollbarRounding = 9.0f;
+	style.GrabRounding = 5.0f;
+	style.TabRounding = 6.0f;
+	style.WindowBorderSize = 1.0f;
+	style.FrameBorderSize = 0.5f;
+	style.PopupBorderSize = 1.0f;
+	style.WindowPadding = ImVec2(12, 12);
+	style.FramePadding = ImVec2(10, 6);
+	style.ItemSpacing = ImVec2(10, 8);
+	style.ItemInnerSpacing = ImVec2(8, 6);
 
-	NSString *FontPath = @"/System/Library/Fonts/Core/Helvetica.ttc";
-	if ([[NSFileManager defaultManager] fileExistsAtPath:FontPath]) {
-		io.Fonts->AddFontFromFileTTF(FontPath.UTF8String, 24.f, NULL, io.Fonts->GetGlyphRangesDefault());
-	} else if ([[NSFileManager defaultManager] fileExistsAtPath:@"/System/Library/Fonts/AppFonts/Charter.ttc"]) {
-		io.Fonts->AddFontFromFileTTF("/System/Library/Fonts/AppFonts/Charter.ttc", 24.f, NULL, io.Fonts->GetGlyphRangesDefault());
-	} else {
-		io.Fonts->AddFontDefault();
-	}
+	ImVec4 *colors = style.Colors;
+	colors[ImGuiCol_WindowBg] = ImVec4(0.063f, 0.063f, 0.078f, 0.95f);  // #101014
+	colors[ImGuiCol_ChildBg] = ImVec4(0.125f, 0.125f, 0.169f, 0.85f);   // #20202B (Cards)
+	colors[ImGuiCol_PopupBg] = ImVec4(0.082f, 0.082f, 0.106f, 0.98f);   // #15151B (Sidebar)
+	colors[ImGuiCol_Border] = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);         // #FF8A00 Subtle glow border
+	colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+	colors[ImGuiCol_FrameBg] = ImVec4(0.14f, 0.14f, 0.18f, 0.90f);
+	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.20f, 0.26f, 1.0f);
+	colors[ImGuiCol_FrameBgActive] = ImVec4(1.0f, 0.54f, 0.0f, 0.35f);  // Orange active
+	colors[ImGuiCol_TitleBg] = ImVec4(0.082f, 0.082f, 0.106f, 1.0f);
+	colors[ImGuiCol_TitleBgActive] = ImVec4(0.082f, 0.082f, 0.106f, 1.0f);
+	colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.082f, 0.082f, 0.106f, 1.0f);
+	colors[ImGuiCol_CheckMark] = ImVec4(1.0f, 0.54f, 0.0f, 1.0f);       // #FF8A00
+	colors[ImGuiCol_SliderGrab] = ImVec4(1.0f, 0.54f, 0.0f, 1.0f);      // #FF8A00
+	colors[ImGuiCol_SliderGrabActive] = ImVec4(1.0f, 0.70f, 0.28f, 1.0f);// #FFB347
+	colors[ImGuiCol_Button] = ImVec4(0.16f, 0.16f, 0.22f, 1.0f);
+	colors[ImGuiCol_ButtonHovered] = ImVec4(1.0f, 0.54f, 0.0f, 0.35f);
+	colors[ImGuiCol_ButtonActive] = ImVec4(1.0f, 0.54f, 0.0f, 0.65f);
+	colors[ImGuiCol_Header] = ImVec4(1.0f, 0.54f, 0.0f, 0.25f);
+	colors[ImGuiCol_HeaderHovered] = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+	colors[ImGuiCol_HeaderActive] = ImVec4(1.0f, 0.54f, 0.0f, 0.70f);
+	colors[ImGuiCol_Tab] = ImVec4(0.12f, 0.12f, 0.16f, 1.0f);
+	colors[ImGuiCol_TabHovered] = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+	colors[ImGuiCol_TabActive] = ImVec4(1.0f, 0.54f, 0.0f, 0.85f);
+	colors[ImGuiCol_Text] = ImVec4(0.96f, 0.96f, 0.98f, 1.0f);          // Clean white
+	colors[ImGuiCol_TextDisabled] = ImVec4(0.55f, 0.55f, 0.62f, 1.0f);  // Muted gray
+
+	// Load Roboto Condensed embedded font directly from memory
+	io.Fonts->AddFontFromMemoryTTF(roboto_regular, sizeof(roboto_regular), 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
 
 	ImGui_ImplMetal_Init(_device);
 
@@ -133,7 +238,14 @@ ImFont *Urbanist;
 	MenDeal = open;
 }
 
-static UITextField *Norecord;
++ (BOOL)isMenuOpen
+{
+	return MenDeal;
+}
+
++ (void)clearData
+{
+}
 
 - (MTKView *)mtkView
 {
@@ -157,41 +269,7 @@ static UITextField *Norecord;
 	self.mtkView.clipsToBounds = YES;
 }
 
-void ColorPicker(const char *name, ImVec4 &color)
-{
-	static ImVec4 backup_color;
-
-	bool open_popup = ImGui::ColorButton((std::string(name) + std::string("##3b")).c_str(), color);
-	// open_popup |= ImGui::Button("Palette");
-	if (open_popup)
-	{
-		ImGui::OpenPopup(name);
-		backup_color = color;
-	}
-	if (ImGui::BeginPopup(name))
-	{
-		ImGui::Spacing();
-		ImGui::Text("Select Color");
-		ImGui::Separator();
-		ImGui::ColorPicker4("##picker", (float *)&color, ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview);
-		ImGui::SameLine();
-
-		ImGui::BeginGroup(); // Lock X position
-		ImGui::Text("Current");
-		ImGui::ColorButton("##current", color,
-						   ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf,
-						   ImVec2(60, 40));
-		ImGui::Text("Previous");
-		if (ImGui::ColorButton("##previous", backup_color, ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60, 40)))
-		{
-			color = backup_color;
-		}
-		ImGui::EndGroup();
-		ImGui::EndPopup();
-	}
-}
-
-#pragma mark - Interaction
+#pragma mark - Touch Interaction
 
 - (void)updateIOWithTouchEvent:(UIEvent *)event
 {
@@ -232,6 +310,8 @@ void ColorPicker(const char *name, ImVec4 &color)
 	[self updateIOWithTouchEvent:event];
 }
 
+#pragma mark - Rendering Loop
+
 - (void)drawInMTKView:(MTKView *)view
 {
 	ImGuiIO &io = ImGui::GetIO();
@@ -247,124 +327,379 @@ void ColorPicker(const char *name, ImVec4 &color)
 	if (renderPassDescriptor != nil)
 	{
 		id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-		[renderEncoder pushDebugGroup:@"ImGui Jane"];
+		[renderEncoder pushDebugGroup:@"OXSAK ImGui Menu"];
 
 		ImGui_ImplMetal_NewFrame(renderPassDescriptor);
 		ImGui::NewFrame();
-		ImFont *font = ImGui::GetFont();
-		font->Scale = 16.f / font->FontSize;
 
-		CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-		CGFloat screenHeight = [UIScreen mainScreen].bounds.size.height;
-		CGFloat x = (screenWidth - 320.0f) / 2.0f;
-		CGFloat y = (screenHeight - 220.0f) / 2.0f;
+		// Responsive layout sizing
+		float screenW = io.DisplaySize.x;
+		float screenH = io.DisplaySize.y;
+		float winW = 600.0f;
+		float winH = 340.0f;
+		if (winW > screenW - 20.0f) winW = screenW - 20.0f;
+		if (winH > screenH - 20.0f) winH = screenH - 20.0f;
+		float posX = (screenW - winW) * 0.5f;
+		float posY = (screenH - winH) * 0.5f;
 
-		ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_FirstUseEver);
-		ImGui::SetNextWindowSize(ImVec2(320.0f, 220.0f), ImGuiCond_FirstUseEver);
-
-		if (MenDeal)
+		// Subtle watermark when menu is closed
+		if (!MenDeal && s_ShowWatermark)
 		{
-			ImGui::SetNextWindowSize(ImVec2(340.0f, 260.0f), ImGuiCond_FirstUseEver);
-			ImGui::Begin("Polyfield Universal ESP", &MenDeal, ImGuiWindowFlags_None);
-
-			if (ImGui::BeginTabBar("Tabs"))
-			{
-				if (ImGui::BeginTabItem("ESP"))
-				{
-					ImGui::Checkbox("Enable ESP", &g_ESP.bEnable);
-					ImGui::Separator();
-
-					ImGui::Checkbox("Box ESP", &g_ESP.bBox);
-					ImGui::SameLine();
-					ColorPicker("##BoxColor", g_ESP.boxColor);
-
-					ImGui::Checkbox("Line ESP", &g_ESP.bLine);
-					ImGui::SameLine();
-					ColorPicker("##LineColor", g_ESP.lineColor);
-
-					ImGui::Checkbox("Skeleton / Bone ESP", &g_ESP.bSkeleton);
-					ImGui::SameLine();
-					ColorPicker("##SkeletonColor", g_ESP.skeletonColor);
-
-					ImGui::Checkbox("Distance ESP", &g_ESP.bDistance);
-
-					ImGui::Checkbox("Draw Local Player (Self Check)", &g_ESP.bDrawSelf);
-
-					ImGui::Separator();
-					ImGui::TextColored(ImVec4(1, 0.8f, 0.2f, 1), "=== WEAPON MEMORY MODS ===");
-					ImGui::Checkbox("No Recoil", &g_bNoRecoil);
-					ImGui::Checkbox("Infinite Ammo", &g_bInfiniteAmmo);
-
-					ImGui::EndTabItem();
-				}
-
-				if (ImGui::BeginTabItem("Debug / Advanced"))
-				{
-					ImGui::TextColored(ImVec4(0, 1, 0, 1), "=== ENGINE STATUS ===");
-					void* cam = Camera_get_main ? Camera_get_main() : nullptr;
-					ImGui::Text("Camera: %s (0x%llx)", cam ? "ACTIVE" : "NULL", (uint64_t)cam);
-					ImGui::Text("Local Player: %s (0x%llx)", g_LocalPlayerPtr ? "IN MATCH" : "LOBBY/RESPAWN", (uint64_t)g_LocalPlayerPtr);
-					ImGui::Text("Unity Resolution: %.0f x %.0f", g_UnityScreenWidth, g_UnityScreenHeight);
-					ImGui::Text("ImGui Display: %.0f x %.0f (%.1f FPS)", 
-								ImGui::GetIO().DisplaySize.x, 
-								ImGui::GetIO().DisplaySize.y, 
-								ImGui::GetIO().Framerate);
-
-					ImGui::Separator();
-					ImGui::TextColored(ImVec4(0.4f, 0.9f, 1.0f, 1), "=== MEMORY ENTITY SCANNER ===");
-					ImGui::Text("Bot Matches (NpcManager): %d bots found", g_NpcCount);
-					ImGui::Text("Network (Mirror.Spawned): %d entities", g_SpawnedNetCount);
-					ImGui::Text("Active ESP Targets: %zu", g_EntityList.size());
-
-					ImGui::Separator();
-					ImGui::TextColored(ImVec4(1, 0.7f, 0.2f, 1), "=== WEAPON DIAGNOSTICS ===");
-					if (g_LiveWeaponPtr) {
-						ImGui::TextColored(ImVec4(0, 1, 0, 1), "Weapon: ACTIVE (0x%llx)", (uint64_t)g_LiveWeaponPtr);
-						ImGui::TextColored(ImVec4(0, 1, 0, 1), "Live Ammo: %d | Reserve: %d", g_LiveWeaponAmmo, g_LiveWeaponMag);
-					} else {
-						ImGui::TextColored(ImVec4(1, 1, 0, 1), "Weapon: (Hold weapon in-game to read)");
-					}
-
-					ImGui::Separator();
-					ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1), "=== BOX CALIBRATION ===");
-					ImGui::SliderFloat("Head Offset (topPos)", &g_ESP.topPosFloat, 0.5f, 4.0f, "%.2f m");
-					ImGui::SliderFloat("Feet Offset (botPos)", &g_ESP.botPosFloat, -1.0f, 1.0f, "%.2f m");
-					ImGui::SliderFloat("Width Scale", &g_ESP.widthScale, 0.1f, 1.5f, "%.2f");
-
-					ImGui::Separator();
-					ImGui::TextColored(ImVec4(1, 0.8f, 0.2f, 1), "=== ENTITY INSPECTOR ===");
-					std::vector<void*> snapshot;
-					{
-						std::lock_guard<std::mutex> lock(g_EntityMutex);
-						snapshot = g_EntityList;
-					}
-
-					if (snapshot.empty()) {
-						ImGui::TextColored(ImVec4(1, 1, 0, 1), "Waiting for bots / players to spawn in match...");
-					} else {
-						for (size_t i = 0; i < snapshot.size() && i < 6; i++) {
-							void* ent = snapshot[i];
-							if (!IsValidPtr(ent)) continue;
-							void* tr = Component_get_transform ? Component_get_transform(ent) : nullptr;
-							if (!IsValidPtr(tr)) continue;
-							Vector3 pos = Transform_get_position(tr);
-							ImVec2 scr;
-							bool onScreen = WorldToScreen(pos, scr);
-							ImGui::Text("[%zu] Pos:(%.1f, %.1f, %.1f) %s", 
-										i, pos.x, pos.y, pos.z,
-										onScreen ? "ON SCREEN" : "OFF SCREEN");
-						}
-					}
-
-					ImGui::EndTabItem();
-				}
-				ImGui::EndTabBar();
+			ImGui::SetNextWindowPos(ImVec2(screenW - 160.0f, 16.0f), ImGuiCond_Always);
+			ImGui::SetNextWindowSize(ImVec2(145.0f, 32.0f), ImGuiCond_Always);
+			ImGuiWindowFlags wmFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+			if (ImGui::Begin("##Watermark", nullptr, wmFlags)) {
+				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 0.85f), "[OXSAK]");
+				ImGui::SameLine();
+				ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 0.7f), "Polyfield");
 			}
 			ImGui::End();
 		}
 
-		// Draw ESP Line and Box overlay (updates memory entities automatically)
-		DrawUniversalESP();
+		if (MenDeal)
+		{
+			ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_FirstUseEver);
+
+			ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar;
+			ImGui::Begin("OXSAK_PANEL", &MenDeal, winFlags);
+
+			// =================================================================
+			// LEFT VERTICAL SIDEBAR (#15151B)
+			// =================================================================
+			float sidebarW = 125.0f;
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f));
+			ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0), true, ImGuiWindowFlags_NoScrollbar);
+			{
+				ImGui::Spacing();
+				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), " OXSAK");
+				ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.7f, 0.8f), " POLYFIELD");
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				const char* tabNames[] = { "AIMBOT", "SILENT AIM", "ESP", "MISC", "SETTINGS" };
+				for (int i = 0; i < 5; i++)
+				{
+					bool isSelected = (s_SelectedTab == i);
+					if (isSelected) {
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.90f));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
+					} else {
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.12f, 0.16f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
+					}
+
+					if (ImGui::Button(tabNames[i], ImVec2(-1, 32))) {
+						s_SelectedTab = i;
+					}
+					ImGui::PopStyleColor(2);
+					ImGui::Spacing();
+				}
+
+				// Push Close Button to Bottom
+				float availHeight = ImGui::GetContentRegionAvail().y;
+				if (availHeight > 40.0f) {
+					ImGui::Dummy(ImVec2(0, availHeight - 38.0f));
+				}
+
+				// Red styled Close button
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.15f, 0.15f, 0.25f));
+				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.25f, 0.25f, 0.80f));
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.40f, 0.40f, 1.0f));
+				if (ImGui::Button("Close Menu", ImVec2(-1, 32))) {
+					MenDeal = false;
+					[ImGuiDrawView showChange:NO];
+				}
+				ImGui::PopStyleColor(3);
+			}
+			ImGui::EndChild();
+			ImGui::PopStyleColor();
+
+			ImGui::SameLine();
+
+			// =================================================================
+			// RIGHT MAIN CONTENT AREA
+			// =================================================================
+			ImGui::BeginChild("ContentArea", ImVec2(0, 0), false);
+			{
+				// Top Horizontal Sub-Tabs (when AIMBOT is active)
+				if (s_SelectedTab == 0)
+				{
+					if (s_AimbotSubTab == 0) {
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
+					} else {
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.20f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
+					}
+					if (ImGui::Button("Aimbot Telemetry", ImVec2(140, 28))) {
+						s_AimbotSubTab = 0;
+					}
+					ImGui::PopStyleColor(2);
+
+					ImGui::SameLine();
+
+					if (s_AimbotSubTab == 1) {
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.54f, 0.0f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
+					} else {
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.20f, 0.80f));
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.90f, 1.0f));
+					}
+					if (ImGui::Button("Silent Aim Telemetry", ImVec2(150, 28))) {
+						s_AimbotSubTab = 1;
+					}
+					ImGui::PopStyleColor(2);
+
+					ImGui::Separator();
+				}
+
+				// Two-Column Card Layout
+				float colW = (ImGui::GetContentRegionAvail().x - 12.0f) * 0.5f;
+
+				// -------------------------------------------------------------
+				// TAB 0: AIMBOT
+				// -------------------------------------------------------------
+				if (s_SelectedTab == 0)
+				{
+					if (s_AimbotSubTab == 0)
+					{
+						// Column 1: Toggles
+						ImGui::BeginChild("AimToggles", ImVec2(colW, 0), true);
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] AIMBOT CONTROLS");
+							ImGui::Separator();
+							ImGui::Spacing();
+
+							OXSAK_Toggle("Enable Aim", &s_AimEnable);
+							ImGui::Spacing();
+							OXSAK_Toggle("Visible Only", &s_AimVisibleOnly);
+							ImGui::Spacing();
+							OXSAK_Toggle("Ignore Team", &s_AimIgnoreTeam);
+							ImGui::Spacing();
+							OXSAK_Toggle("Sticky Lock", &s_AimSticky);
+						}
+						ImGui::EndChild();
+
+						ImGui::SameLine();
+
+						// Column 2: Sliders
+						ImGui::BeginChild("AimSliders", ImVec2(colW, 0), true);
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] TUNING & CALIBRATION");
+							ImGui::Separator();
+							ImGui::Spacing();
+
+							ImGui::SliderFloat("FOV", &s_AimFOV, 10.0f, 180.0f, "%.0f deg");
+							ImGui::Spacing();
+							ImGui::SliderFloat("Smoothness", &s_AimSmoothness, 1.0f, 30.0f, "%.1f");
+							ImGui::Spacing();
+							ImGui::SliderFloat("Max Turn", &s_AimMaxTurn, 0.0f, 100.0f, "%.1f");
+							ImGui::Spacing();
+							ImGui::SliderFloat("Reaction", &s_AimReaction, 0.0f, 100.0f, "%.0f ms");
+							ImGui::Spacing();
+							ImGui::SliderFloat("Jitter", &s_AimJitter, 0.0f, 0.30f, "%.2f");
+						}
+						ImGui::EndChild();
+					}
+					else
+					{
+						// Column 1: Silent Aim Toggles
+						ImGui::BeginChild("SilentToggles", ImVec2(colW, 0), true);
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT AIM CONTROLS");
+							ImGui::Separator();
+							ImGui::Spacing();
+
+							OXSAK_Toggle("Enable Silent Aim", &s_SilentEnable);
+							ImGui::Spacing();
+							OXSAK_Toggle("Auto Fire", &s_SilentAutoFire);
+							ImGui::Spacing();
+							OXSAK_Toggle("Hitchance Filter", &s_SilentHitchanceCheck);
+						}
+						ImGui::EndChild();
+
+						ImGui::SameLine();
+
+						// Column 2: Silent Aim Sliders
+						ImGui::BeginChild("SilentSliders", ImVec2(colW, 0), true);
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT TUNING");
+							ImGui::Separator();
+							ImGui::Spacing();
+
+							ImGui::SliderFloat("Silent FOV", &s_SilentFOV, 5.0f, 90.0f, "%.0f deg");
+							ImGui::Spacing();
+							ImGui::SliderFloat("Hitchance", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
+							ImGui::Spacing();
+							const char* bones[] = { "Head", "Chest", "Pelvis" };
+							ImGui::Combo("Target Bone", &s_SilentBone, bones, 3);
+						}
+						ImGui::EndChild();
+					}
+				}
+				// -------------------------------------------------------------
+				// TAB 1: SILENT AIM DIRECT TAB
+				// -------------------------------------------------------------
+				else if (s_SelectedTab == 1)
+				{
+					ImGui::BeginChild("SilentCol1", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT AIM CONTROLS");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						OXSAK_Toggle("Enable Silent Aim", &s_SilentEnable);
+						ImGui::Spacing();
+						OXSAK_Toggle("Auto Fire", &s_SilentAutoFire);
+						ImGui::Spacing();
+						OXSAK_Toggle("Hitchance Filter", &s_SilentHitchanceCheck);
+					}
+					ImGui::EndChild();
+
+					ImGui::SameLine();
+
+					ImGui::BeginChild("SilentCol2", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] SILENT TUNING");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::SliderFloat("Silent FOV", &s_SilentFOV, 5.0f, 90.0f, "%.0f deg");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Hitchance", &s_SilentHitchance, 10.0f, 100.0f, "%.0f %%");
+						ImGui::Spacing();
+						const char* bones[] = { "Head", "Chest", "Pelvis" };
+						ImGui::Combo("Target Bone", &s_SilentBone, bones, 3);
+					}
+					ImGui::EndChild();
+				}
+				// -------------------------------------------------------------
+				// TAB 2: ESP
+				// -------------------------------------------------------------
+				else if (s_SelectedTab == 2)
+				{
+					ImGui::BeginChild("ESPToggles", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] ESP DISPLAY ELEMENTS");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						OXSAK_Toggle("Enable ESP Overlay", &s_ESPEnable);
+						ImGui::Spacing();
+						OXSAK_Toggle("2D Box ESP", &s_ESPBox);
+						ImGui::Spacing();
+						OXSAK_Toggle("Snaplines", &s_ESPLine);
+						ImGui::Spacing();
+						OXSAK_Toggle("Skeleton / Bones", &s_ESPSkeleton);
+						ImGui::Spacing();
+						OXSAK_Toggle("Distance Indicator", &s_ESPDistance);
+						ImGui::Spacing();
+						OXSAK_Toggle("Health Bar", &s_ESPHealth);
+					}
+					ImGui::EndChild();
+
+					ImGui::SameLine();
+
+					ImGui::BeginChild("ESPSliders", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] ESP CALIBRATION");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::SliderFloat("Head Offset", &s_HeadOffset, 0.5f, 3.5f, "%.2f m");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Feet Offset", &s_FeetOffset, -1.0f, 1.0f, "%.2f m");
+						ImGui::Spacing();
+						ImGui::SliderFloat("Box Width Scale", &s_WidthScale, 0.2f, 1.5f, "%.2f");
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.9f, 1.0f), "ESP Visual Mode: Simulated");
+					}
+					ImGui::EndChild();
+				}
+				// -------------------------------------------------------------
+				// TAB 3: MISC
+				// -------------------------------------------------------------
+				else if (s_SelectedTab == 3)
+				{
+					ImGui::BeginChild("MiscCol1", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] ENGINE METRICS");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::Text("Screen Resolution: %.0f x %.0f", io.DisplaySize.x, io.DisplaySize.y);
+						ImGui::Text("Framerate: %.1f FPS", io.Framerate);
+						ImGui::Text("Interface Mode: Polyfield Injected MTKView");
+						ImGui::Text("Touch Filter: Selective pointInside");
+					}
+					ImGui::EndChild();
+
+					ImGui::SameLine();
+
+					ImGui::BeginChild("MiscCol2", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] VISUAL OVERLAYS");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						OXSAK_Toggle("Show Top Watermark", &s_ShowWatermark);
+						ImGui::Spacing();
+						OXSAK_Toggle("Show Screen Crosshair", &s_ShowCrosshair);
+					}
+					ImGui::EndChild();
+				}
+				// -------------------------------------------------------------
+				// TAB 4: SETTINGS
+				// -------------------------------------------------------------
+				else if (s_SelectedTab == 4)
+				{
+					ImGui::BeginChild("SettingsCol1", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] LAUNCHER CONFIGURATION");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::Text("Badge Dimensions: 56 x 56 pt");
+						ImGui::Text("Launcher Glow: Enabled (#FF8A00)");
+						ImGui::Text("Persistence: NSUserDefaults");
+						ImGui::Text("Gesture: Tap or 2-Finger Double Tap");
+					}
+					ImGui::EndChild();
+
+					ImGui::SameLine();
+
+					ImGui::BeginChild("SettingsCol2", ImVec2(colW, 0), true);
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "[=] THEME TUNING");
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						ImGui::SliderFloat("Menu Opacity", &s_MenuAlpha, 0.50f, 1.00f, "%.2f");
+						style.Colors[ImGuiCol_WindowBg].w = s_MenuAlpha;
+					}
+					ImGui::EndChild();
+				}
+			}
+			ImGui::EndChild();
+
+			ImGui::End();
+		}
+
+		// Connect safe visual ESP state to engine
+		g_ESP.bEnable = s_ESPEnable;
+		g_ESP.bBox = s_ESPBox;
+		g_ESP.bLine = s_ESPLine;
+		g_ESP.bSkeleton = s_ESPSkeleton;
+		g_ESP.bDistance = s_ESPDistance;
+		g_ESP.topPosFloat = s_HeadOffset;
+		g_ESP.botPosFloat = s_FeetOffset;
+		g_ESP.widthScale = s_WidthScale;
+
+		if (s_ESPEnable) {
+			DrawUniversalESP();
+		}
 
 		ImGui::Render();
 		ImDrawData *draw_data = ImGui::GetDrawData();
@@ -397,7 +732,6 @@ void *hack_thread(void *)
 
 void __attribute__((constructor)) initialize()
 {
-	// PubgLoad +load is triggered automatically by dyld; duplicate call removed to prevent double menu
 }
 
 @end

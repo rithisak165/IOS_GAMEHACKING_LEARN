@@ -12,6 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 ///
 + (void)showChange:(BOOL)open;
++ (BOOL)isMenuOpen;
 + (void)clearData;
 
 
