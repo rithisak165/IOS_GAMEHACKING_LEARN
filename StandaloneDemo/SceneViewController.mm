@@ -16,8 +16,7 @@
 // OXSAK STATE & TELEMETRY CONFIGURATION (Orange Cyberpunk Theme)
 // =========================================================================================
 struct OXSAKState {
-    // Navigation State
-    int currentTab = 0;       // 0: AIMBOT, 1: ESP, 2: MISC, 3: SETTINGS
+    int currentTab    = 0;    // 0: AIMBOT, 1: ESP, 2: MISC, 3: SETTINGS
     int currentSubTab = 0;    // 0: Aimbot, 1: Silent Aim
 
     // AIMBOT & SILENT AIM Settings (Matching Reference Reference)
@@ -44,7 +43,7 @@ struct OXSAKState {
     float botOffset           = 0.00f;
     float boxWidthScale       = 0.45f;
 
-    // Custom Color Palette
+    // Custom Color Palette (#FF8A00 / #FFB347)
     ImVec4 colPrimaryOrange   = ImVec4(1.0f, 0.54f, 0.0f, 1.0f);   // #FF8A00
     ImVec4 colSecondaryOrange = ImVec4(1.0f, 0.70f, 0.28f, 1.0f);  // #FFB347
     ImVec4 colSkeleton        = ImVec4(1.0f, 0.54f, 0.0f, 0.95f);  // Orange Skeleton
@@ -99,10 +98,13 @@ struct DummyTarget {
 @end
 
 // =========================================================================================
-// FLOATING OXSAK LAUNCHER BADGE (Draggable with Orange Glow)
+// FLOATING OXSAK LAUNCHER BADGE (Supplied Exact Logo with Glowing Orange Shadow)
 // =========================================================================================
-@interface FloatingOXSAKButton : UIButton
+@interface FloatingOXSAKButton : UIView
+@property (nonatomic, strong) UIButton *actionButton;
+@property (nonatomic, strong) UIImageView *logoImageView;
 @property (nonatomic, assign) CGPoint lastPoint;
+@property (nonatomic, copy) void (^onTap)(void);
 @end
 
 @implementation FloatingOXSAKButton
@@ -111,34 +113,39 @@ struct DummyTarget {
 {
     self = [super initWithFrame:frame];
     if (self) {
-        self.layer.cornerRadius = frame.size.width / 2.0;
+        self.backgroundColor = [UIColor clearColor];
         self.layer.masksToBounds = NO;
-        self.layer.borderWidth = 2.5;
-        self.layer.borderColor = [UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:0.95].CGColor; // #FF8A00
 
-        // Orange glowing shadow effect
-        self.layer.shadowColor = [UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:0.9].CGColor;
-        self.layer.shadowRadius = 12.0;
-        self.layer.shadowOpacity = 0.85;
+        // Glowing outer orange shadow (#FF8A00)
+        self.layer.shadowColor = [UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:0.95].CGColor;
+        self.layer.shadowRadius = 14.0;
+        self.layer.shadowOpacity = 0.90;
         self.layer.shadowOffset = CGSizeMake(0, 0);
 
-        // Load custom OXSAK emblem
+        // Inner circular image view displaying the exact OXSAK logo
+        _logoImageView = [[UIImageView alloc] initWithFrame:self.bounds];
+        _logoImageView.contentMode = UIViewContentModeScaleAspectFit;
+        _logoImageView.layer.cornerRadius = frame.size.width / 2.0;
+        _logoImageView.layer.masksToBounds = YES;
+        _logoImageView.layer.borderWidth = 2.5;
+        _logoImageView.layer.borderColor = [UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:0.95].CGColor;
+        _logoImageView.backgroundColor = [UIColor colorWithRed:0.06 green:0.06 blue:0.08 alpha:0.95];
+
         NSString *path = [[NSBundle mainBundle] pathForResource:@"oxsak_badge" ofType:@"png"];
         UIImage *img = [UIImage imageWithContentsOfFile:path];
         if (!img) img = [UIImage imageNamed:@"oxsak_badge.png"];
         if (img) {
-            [self setImage:img forState:UIControlStateNormal];
-            self.imageView.contentMode = UIViewContentModeScaleAspectFit;
-            self.imageView.layer.cornerRadius = (frame.size.width - 4.0) / 2.0;
-            self.imageView.clipsToBounds = YES;
-        } else {
-            self.backgroundColor = [UIColor colorWithRed:0.06 green:0.06 blue:0.08 alpha:0.9];
-            [self setTitle:@"0xSAK" forState:UIControlStateNormal];
-            [self setTitleColor:[UIColor colorWithRed:1.0 green:0.54 blue:0.0 alpha:1.0] forState:UIControlStateNormal];
-            self.titleLabel.font = [UIFont boldSystemFontOfSize:13];
+            _logoImageView.image = img;
         }
+        [self addSubview:_logoImageView];
 
-        // Restore saved position
+        // Invisible touch button over the badge
+        _actionButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        _actionButton.frame = self.bounds;
+        [_actionButton addTarget:self action:@selector(buttonTapped) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:_actionButton];
+
+        // Restore persisted coordinates
         NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
         if ([defs objectForKey:@"OXSAK_Btn_X"] && [defs objectForKey:@"OXSAK_Btn_Y"]) {
             CGFloat x = [defs floatForKey:@"OXSAK_Btn_X"];
@@ -146,10 +153,16 @@ struct DummyTarget {
             self.center = CGPointMake(x, y);
         }
 
+        // Draggable gesture
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
         [self addGestureRecognizer:pan];
     }
     return self;
+}
+
+- (void)buttonTapped
+{
+    if (self.onTap) self.onTap();
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)pan
@@ -396,6 +409,17 @@ struct DummyTarget {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
 
+    // Load authentic Roboto Condensed Font
+    NSString *fontPath = [[NSBundle mainBundle] pathForResource:@"RobotoCondensed-Bold" ofType:@"ttf"];
+    if (!fontPath || ![[NSFileManager defaultManager] fileExistsAtPath:fontPath]) {
+        fontPath = [[NSBundle mainBundle] pathForResource:@"RobotoCondensed-Regular" ofType:@"ttf"];
+    }
+    if (fontPath && [[NSFileManager defaultManager] fileExistsAtPath:fontPath]) {
+        io.Fonts->AddFontFromFileTTF(fontPath.UTF8String, 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    } else {
+        io.Fonts->AddFontDefault();
+    }
+
     // Apply exact OXSAK Orange Cyberpunk Theme (#101014, #15151B, #20202B, #FF8A00)
     ImGuiStyle &style = ImGui::GetStyle();
     style.WindowRounding    = 12.0f;
@@ -431,7 +455,11 @@ struct DummyTarget {
     CGRect frame = CGRectMake(self.view.bounds.size.width - btnSize - 16.0f, 44.0f, btnSize, btnSize);
     _floatingButton = [[FloatingOXSAKButton alloc] initWithFrame:frame];
     _floatingButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin;
-    [_floatingButton addTarget:self action:@selector(toggleMenu) forControlEvents:UIControlEventTouchUpInside];
+    
+    __weak typeof(self) weakSelf = self;
+    _floatingButton.onTap = ^{
+        [weakSelf toggleMenu];
+    };
     [self.view addSubview:_floatingButton];
 }
 
@@ -824,12 +852,16 @@ static void EndCard()
     CGFloat screenW = self.view.bounds.size.width;
     CGFloat screenH = self.view.bounds.size.height;
 
-    // Responsive sizing matching reference proportions
-    CGFloat menuW = fminf(720.0f, screenW - 24.0f);
-    CGFloat menuH = fminf(380.0f, screenH - 24.0f);
+    // Responsive scaling matching reference proportions
+    CGFloat menuW = fminf(740.0f, screenW - 20.0f);
+    CGFloat menuH = fminf(400.0f, screenH - 20.0f);
+    if (screenW < 520.0f) {
+        menuW = screenW - 16.0f;
+        menuH = screenH - 36.0f;
+    }
 
-    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2((screenW - menuW) / 2.0f, (screenH - menuH) / 2.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2((screenW - menuW) / 2.0f, (screenH - menuH) / 2.0f), ImGuiCond_Always);
 
     ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar;
 
@@ -838,10 +870,10 @@ static void EndCard()
         // =================================================================================
         // 1. LEFT VERTICAL SIDEBAR (#15151B)
         // =================================================================================
-        float sidebarW = 160.0f;
+        float sidebarW = (screenW < 520.0f) ? 120.0f : 160.0f;
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f)); // #15151B
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 12.0f));
         ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0.0f), false);
 
         // Sidebar Logo / Title Header
@@ -899,7 +931,6 @@ static void EndCard()
         // Top Horizontal Sub-Tabs Bar
         ImGui::Spacing();
         if (g_State.currentTab == 0) {
-            // Aimbot & Silent Aim Subtabs
             bool sub1 = (g_State.currentSubTab == 0);
             if (sub1) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.70f, 0.28f, 1.0f));
             else      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.65f, 1.0f));
@@ -1037,6 +1068,9 @@ static void EndCard()
             ImGui::BeginChild("SettingsCol", ImVec2(0.0f, 0.0f), false);
 
             BeginCard("OXSAK Mobile Preferences", 0.0f);
+            ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[ AUTHORIZED DEVELOPMENT SIMULATOR ]");
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.7f, 1.0f), "Running standalone telemetry. Polyfield binary is untouched.");
+            ImGui::Spacing();
             ImGui::BulletText("Tap 0xSAK Floating Badge to toggle menu");
             ImGui::BulletText("Drag 0xSAK Badge to relocate anywhere");
             ImGui::BulletText("Double-tap with 2 fingers anywhere to toggle");

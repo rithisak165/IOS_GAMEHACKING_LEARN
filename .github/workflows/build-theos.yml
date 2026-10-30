@@ -146,6 +146,7 @@ jobs:
 
           cp StandaloneDemo/Info.plist Payload/ESP3DDemo.app/Info.plist
           cp StandaloneDemo/*.png Payload/ESP3DDemo.app/ 2>/dev/null || true
+          cp StandaloneDemo/*.ttf Payload/ESP3DDemo.app/ 2>/dev/null || true
           ldid -S Payload/ESP3DDemo.app/ESP3DDemo
           zip -r output/OXSAK_Polyfield_Demo.ipa Payload
           cp output/OXSAK_Polyfield_Demo.ipa output/ESP_3D_Demo.ipa
