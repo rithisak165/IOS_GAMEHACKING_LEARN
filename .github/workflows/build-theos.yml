@@ -132,7 +132,7 @@ jobs:
           # 1. Compile Full Standalone 3D SceneKit + ImGui Application (ESP_3D_Demo.ipa)
           echo "=== Compiling Full 3D Standalone SceneKit + ImGui Demo App ==="
           mkdir -p Payload/ESP3DDemo.app
-          xcrun -sdk iphoneos clang++ -arch arm64 -std=c++17 -fobjc-arc -mios-version-min=15.0 \
+          xcrun -sdk iphoneos clang++ -arch arm64 -std=c++17 -stdlib=libc++ -fobjc-arc -mios-version-min=15.0 \
             -I. -I./IMGUI \
             StandaloneDemo/main.m \
             StandaloneDemo/SceneViewController.mm \
