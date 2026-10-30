@@ -63,7 +63,7 @@ static bool s_SilentAutoFire = false;
 static bool s_SilentHitchanceCheck = true;
 static float s_SilentFOV = 40.0f;
 static float s_SilentHitchance = 85.0f;
-static int s_SilentTargetBone = 0; // 0: Head, 1: Chest
+static int s_SilentBone = 0; // 0: Head, 1: Chest
 
 // Visual ESP Configuration
 static bool s_ESPEnable = false;
@@ -677,7 +677,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 						ImGui::Spacing();
 
 						ImGui::SliderFloat("Menu Opacity", &s_MenuAlpha, 0.50f, 1.00f, "%.2f");
-						style.Colors[ImGuiCol_WindowBg].w = s_MenuAlpha;
+						ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = s_MenuAlpha;
 					}
 					ImGui::EndChild();
 				}
