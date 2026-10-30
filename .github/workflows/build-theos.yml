@@ -120,8 +120,8 @@ jobs:
       - name: Setup Python & Cyan (Pyzule)
         run: |
           echo "=== Installing Cyan / Pyzule-RW ==="
-          pip3 install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
-          pip3 install lief Pillow
+          pip3 install --break-system-packages --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
+          pip3 install --break-system-packages lief Pillow
 
       - name: Package Sideloadable IPA
         run: |
@@ -235,3 +235,4 @@ jobs:
           name: Protected-iOS-IPA
           path: output/*.ipa
           retention-days: 14
+
