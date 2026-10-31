@@ -1397,8 +1397,6 @@ static void EndCard()
     }
     ImGui::End();
 
-    float screenW = ImGui::GetIO().DisplaySize.x;
-    float screenH = ImGui::GetIO().DisplaySize.y;
 
     // 1. Draw Centered FOV Circle Visualization if enabled
     if (g_State.bShowFOVCircle) {
