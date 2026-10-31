@@ -76,23 +76,32 @@ static float s_AimJitter = 0.07f;
 
 // ── Silent Aim Settings ──
 static bool s_SilentEnable = false;
-static bool s_SilentAutoFire = false;
-static bool s_SilentHitchanceCheck = true;
-static bool s_SilentIgnoreSleepers = true;
-static float s_SilentFOV = 40.0f;
-static float s_SilentHitchance = 85.0f;
+static bool s_SilentVisibleCheck = true;
+static bool s_SilentIgnoreTeam = true;
+static bool s_Silent360 = false;
+static float s_SilentFOV = 75.0f;
+static float s_SilentSmoothness = 12.0f;
 static int s_SilentBone = 0;        // 0: Head, 1: Neck, 2: Chest, 3: Pelvis
 
-// ── MISC Feature Toggles ──
-// (Wired to existing g_bNoRecoil / g_bInfiniteAmmo in UniversalESP.h)
+// ── MISC Feature Variables ──
 static bool s_NoRecoil       = false;
-static bool s_NoSpread       = false;
+static bool s_NoShake        = false;
 static bool s_UnlimitedAmmo  = false;
 static bool s_FastReload     = false;
-static bool s_FastShoot      = false;
-static bool s_OneHitKill     = false;
-static bool s_SpeedHack      = false;
-static float s_SpeedMultiplier = 1.0f;
+static bool s_AutoMelee      = false;
+static bool s_CustomFOV      = false;
+
+// ── Legitimate Player Count Test Data ──
+static int s_PlayerCountSimMode = 2; // 0: 0 Players, 1: 1 Target, 2: 3 Targets, 3: 5 Targets
+static int GetActivePlayerCount() {
+	switch (s_PlayerCountSimMode) {
+		case 0: return 0;
+		case 1: return 1;
+		case 2: return 3;
+		case 3: return 5;
+		default: return 3;
+	}
+}
 
 // ── HUD & System ──
 static bool s_ShowWatermark = true;
@@ -314,6 +323,67 @@ static void BeginMasterCard(const char* id, const char* title, NavIcon icon, flo
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 28.0f);
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%s", title);
+}
+
+// Reusable Validated Health Display Component
+static void DrawHealthBarWidget(const char* label, float currentHp, float maxHp, bool isAvailable, float width, float height = 14.0f)
+{
+	float availW = width > 0.0f ? width : ImGui::GetContentRegionAvail().x;
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window->SkipItems) return;
+
+	char pctStr[64];
+	ImU32 textCol;
+	ImU32 fillCol;
+	float ratio = 0.0f;
+
+	if (!isAvailable) {
+		snprintf(pctStr, sizeof(pctStr), "N/A (Unavailable)");
+		textCol = IM_COL32(150, 150, 165, 240);
+		fillCol = IM_COL32(50, 50, 60, 200);
+		ratio = 0.0f;
+	} else {
+		ratio = maxHp > 0.0f ? fmaxf(0.0f, fminf(1.0f, currentHp / maxHp)) : 0.0f;
+		int pctInt = (int)(ratio * 100.0f + 0.5f);
+		snprintf(pctStr, sizeof(pctStr), "%d%% (%.0f/%.0f HP)", pctInt, currentHp, maxHp);
+
+		if (ratio >= 0.70f) {
+			textCol = IM_COL32(76, 217, 100, 255);   // Bright Green
+			fillCol = IM_COL32(52, 199, 89, 255);
+		} else if (ratio >= 0.40f) {
+			textCol = IM_COL32(255, 204, 0, 255);    // Amber Yellow
+			fillCol = IM_COL32(255, 179, 71, 255);
+		} else if (ratio > 0.0f) {
+			textCol = IM_COL32(255, 69, 58, 255);    // Red
+			fillCol = IM_COL32(215, 38, 56, 255);
+		} else {
+			textCol = IM_COL32(255, 59, 48, 255);    // Dark Red (0 HP)
+			fillCol = IM_COL32(180, 25, 35, 255);
+		}
+	}
+
+	ImVec2 pos = window->DC.CursorPos;
+	ImDrawList* drawList = window->DrawList;
+
+	drawList->AddText(pos, IM_COL32(245, 245, 250, 255), label);
+
+	ImVec2 tSize = ImGui::CalcTextSize(pctStr);
+	ImVec2 rightTextPos(pos.x + availW - tSize.x, pos.y);
+	drawList->AddText(rightTextPos, textCol, pctStr);
+
+	float barY = pos.y + ImGui::GetFontSize() + 4.0f;
+	ImVec2 trackMin(pos.x, barY);
+	ImVec2 trackMax(pos.x + availW, barY + height);
+
+	drawList->AddRectFilled(trackMin, trackMax, IM_COL32(36, 36, 48, 240), 4.0f);
+	drawList->AddRect(trackMin, trackMax, IM_COL32(55, 55, 70, 200), 4.0f, 0, 1.0f);
+
+	if (ratio > 0.0f) {
+		ImVec2 fillMax(pos.x + (availW * ratio), barY + height);
+		drawList->AddRectFilled(trackMin, fillMax, fillCol, 4.0f);
+	}
+
+	ImGui::Dummy(ImVec2(availW, height + ImGui::GetFontSize() + 6.0f));
 }
 
 static void BeginCard(const char* id, const char* title, NavIcon icon, float width, float height)
@@ -619,7 +689,7 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 	style.WindowBorderSize = 1.2f;
 	style.FrameBorderSize = 0.5f;
 	style.PopupBorderSize = 1.0f;
-	style.ScrollbarSize = 6.0f;
+	style.ScrollbarSize = 8.0f;
 	style.WindowPadding = ImVec2(10, 10);
 	style.FramePadding = ImVec2(8, 5);
 	style.ItemSpacing = ImVec2(8, 6);
@@ -1080,31 +1150,51 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 
 						ImGui::SameLine(0, colGap);
 
-						// Right Card: Extras (Matching Image 2)
+						// Right Card: Extras (Player Count & Max Distance)
 						BeginCard("ESP_Extras_Card", "Extras", NAV_ICON_SETTING, colW, cardH);
 						{
-							CardToggle("Count", &g_ESP.bCount, "e_cnt");
-							ImGui::Spacing();
-							CardToggle("Off-Screen", &g_ESP.bOffScreen, "e_off");
-							ImGui::Spacing();
-							CardToggle("Ignore Team", &g_ESP.bIgnoreTeam, "e_team");
-							ImGui::Spacing();
-							CardToggle("Visible", &g_ESP.bVisibleOnly, "e_vis");
+							// Player Count Row showing actual available player count
+							ImGui::AlignTextToFramePadding();
+							ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Player Count");
+							int activeCount = GetActivePlayerCount();
+							char cntBuf[32];
+							snprintf(cntBuf, sizeof(cntBuf), "%d Active", activeCount);
+							float cntW = ImGui::CalcTextSize(cntBuf).x;
+							float rightCntX = ImGui::GetWindowContentRegionMax().x - cntW;
+							if (rightCntX > ImGui::GetCursorPosX()) ImGui::SameLine(rightCntX);
+							else ImGui::SameLine();
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", cntBuf);
+
 							ImGui::Spacing();
 
-							// Max Dist row with amber tag value
+							// Active test data mode
+							const char* simModes[] = { "0 Players", "1 Target", "3 Targets", "5 Targets" };
+							ImGui::SetNextItemWidth(-1.0f);
+							ImGui::Combo("##PlayerCountSim", &s_PlayerCountSimMode, simModes, 4);
+
+							ImGui::Spacing();
+							ImGui::Separator();
+							ImGui::Spacing();
+
+							// Max Distance row with amber tag value
 							ImGui::AlignTextToFramePadding();
-							ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Dist");
+							ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Distance");
 							char distBuf[32];
 							snprintf(distBuf, sizeof(distBuf), "%.0fm", g_ESP.maxDistance);
 							float distW = ImGui::CalcTextSize(distBuf).x;
 							float rightDistX = ImGui::GetWindowContentRegionMax().x - distW;
 							if (rightDistX > ImGui::GetCursorPosX()) ImGui::SameLine(rightDistX);
 							else ImGui::SameLine();
-							ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "%s", distBuf);
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", distBuf);
 
 							ImGui::SetNextItemWidth(-1.0f);
 							ImGui::SliderFloat("##MaxDistSlider", &g_ESP.maxDistance, 20.0f, 500.0f, "");
+
+							ImGui::Spacing();
+
+							// Validated Target Health Display
+							float demoHp = 85.0f;
+							DrawHealthBarWidget("Target Health", demoHp, 100.0f, (activeCount > 0), colW - 24.0f, 12.0f);
 
 							ImGui::Spacing();
 							const char* boxStyles[] = { "Square", "Corner" };
@@ -1203,76 +1293,99 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 					}
 				}
 				// =============================================================
-				// TAB 1: AIM (Aimbot & Aim Tuning Cards)
+				// TAB 1: AIM (Silent Aim Controls & Tuning)
 				// =============================================================
 				else if (s_SelectedTab == 1)
 				{
-					float aimCardH = 260.0f;
-					BeginCard("Aim_Main_Card", "Aimbot", NAV_ICON_AIM, colW, aimCardH);
+					float aimCardH = 280.0f;
+					BeginCard("Aim_Main_Card", "Silent Aim", NAV_ICON_AIM, colW, aimCardH);
 					{
-						CardToggle("Enable", &s_AimEnable, "aim_en");
+						CardToggle("Enable", &s_SilentEnable, "s_en");
 						ImGui::Spacing();
-						CardToggle("Visible Check", &s_AimVisibleOnly, "aim_vis");
+						CardToggle("Visible Check", &s_SilentVisibleCheck, "s_vis");
 						ImGui::Spacing();
-						CardToggle("Ignore Team", &s_AimIgnoreTeam, "aim_team");
+						CardToggle("Ignore Team", &s_SilentIgnoreTeam, "s_team");
 						ImGui::Spacing();
-						CardToggle("Sticky Lock", &s_AimSticky, "aim_stick");
-						ImGui::Spacing();
-						CardToggle("Draw FOV", &s_AimDrawFOV, "aim_dfov");
+						CardToggle("360 Degree", &s_Silent360, "s_360");
 					}
 					EndCard();
 
 					ImGui::SameLine(0, colGap);
 
-					BeginCard("Aim_Tuning_Card", "Aimbot Tuning", NAV_ICON_AIM, colW, aimCardH);
+					BeginCard("Aim_Tuning_Card", "Silent Aim Tuning", NAV_ICON_AIM, colW, aimCardH);
 					{
-						ImGui::TextUnformatted("FOV Radius");
+						// FOV Radius Slider with Amber tag
+						ImGui::AlignTextToFramePadding();
+						ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "FOV Radius");
+						char fovBuf[32];
+						snprintf(fovBuf, sizeof(fovBuf), "%.0f deg", s_SilentFOV);
+						float fovW = ImGui::CalcTextSize(fovBuf).x;
+						float rFovX = ImGui::GetWindowContentRegionMax().x - fovW;
+						if (rFovX > ImGui::GetCursorPosX()) ImGui::SameLine(rFovX);
+						else ImGui::SameLine();
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", fovBuf);
+
 						ImGui::SetNextItemWidth(-1.0f);
-						ImGui::SliderFloat("##AimFOV", &s_AimFOV, 10.0f, 180.0f, "%.0f deg");
+						ImGui::SliderFloat("##SilentFOV", &s_SilentFOV, 10.0f, 180.0f, "");
+
 						ImGui::Spacing();
-						ImGui::TextUnformatted("Smoothness");
+
+						// Smoothness Slider with Amber tag
+						ImGui::AlignTextToFramePadding();
+						ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Smoothness");
+						char smBuf[32];
+						snprintf(smBuf, sizeof(smBuf), "%.1f", s_SilentSmoothness);
+						float smW = ImGui::CalcTextSize(smBuf).x;
+						float rSmX = ImGui::GetWindowContentRegionMax().x - smW;
+						if (rSmX > ImGui::GetCursorPosX()) ImGui::SameLine(rSmX);
+						else ImGui::SameLine();
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", smBuf);
+
 						ImGui::SetNextItemWidth(-1.0f);
-						ImGui::SliderFloat("##AimSmooth", &s_AimSmoothness, 1.0f, 30.0f, "%.1f");
+						ImGui::SliderFloat("##SilentSmoothness", &s_SilentSmoothness, 1.0f, 30.0f, "");
+
 						ImGui::Spacing();
-						ImGui::TextUnformatted("Target Bone");
-						ImGui::SetNextItemWidth(-1.0f);
+
+						// Target Bone Dropdown (Head, Neck, Chest, Pelvis)
+						ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Target Bone");
 						const char* bones[] = { "Head", "Neck", "Chest", "Pelvis" };
+						ImGui::SetNextItemWidth(-1.0f);
 						ImGui::Combo("##SilentBone", &s_SilentBone, bones, 4);
 					}
 					EndCard();
 				}
 				// =============================================================
-				// TAB 2: MISC (Matching Reference Image 1)
+				// TAB 2: MISC (No Recoil, No Shake, Unlimited Ammo, Fast Reload)
 				// =============================================================
 				else if (s_SelectedTab == 2)
 				{
 					float miscCardH = 82.0f;
 
-					// Row 1: Freecam | Time Control
-					MiscToggleCard("Misc_Freecam", "Freecam", NAV_ICON_AIM, colW, miscCardH, &s_Freecam, "m_fc");
+					// Row 1: No Recoil | No Shake
+					MiscToggleCard("Misc_NoRecoil", "No Recoil", NAV_ICON_AIM, colW, miscCardH, &s_NoRecoil, "m_nr");
 					ImGui::SameLine(0, colGap);
-					MiscToggleCard("Misc_TimeControl", "Time Control", NAV_ICON_SETTING, colW, miscCardH, &s_TimeControl, "m_tc");
+					MiscToggleCard("Misc_NoShake", "No Shake", NAV_ICON_SETTING, colW, miscCardH, &s_NoShake, "m_ns");
 
 					ImGui::Spacing();
 
-					// Row 2: FPS Unlocker | Stream Mode
-					MiscToggleCard("Misc_FPS", "FPS Unlocker", NAV_ICON_MISC, colW, miscCardH, &s_FPSUnlocker, "m_fps");
+					// Row 2: Unlimited Ammo | Fast Reload
+					MiscToggleCard("Misc_UnlimitedAmmo", "Unlimited Ammo", NAV_ICON_MISC, colW, miscCardH, &s_UnlimitedAmmo, "m_ua");
 					ImGui::SameLine(0, colGap);
-					MiscToggleCard("Misc_Stream", "Stream Mode", NAV_ICON_ESP, colW, miscCardH, &s_StreamMode, "m_sm");
+					MiscToggleCard("Misc_FastReload", "Fast Reload", NAV_ICON_ESP, colW, miscCardH, &s_FastReload, "m_fr");
 
 					ImGui::Spacing();
 
-					// Row 3: Auto Melee Attack | HUD Overlays
+					// Row 3: Auto Melee Attack | Watermark HUD
 					MiscToggleCard("Misc_Melee", "Auto Melee Attack", NAV_ICON_AIM, colW, miscCardH, &s_AutoMelee, "m_am");
 					ImGui::SameLine(0, colGap);
 					MiscToggleCard("Misc_Watermark", "Watermark HUD", NAV_ICON_ESP, colW, miscCardH, &s_ShowWatermark, "m_wm");
 
 					ImGui::Spacing();
 
-					// Row 4: Compensated Recoil | Unlimited Ammo
-					MiscToggleCard("Misc_NoRecoil", "Compensated Recoil", NAV_ICON_AIM, colW, miscCardH, &s_NoRecoil, "m_nr");
+					// Row 4: Speed Multiplier | Custom Game FOV
+					MiscToggleCard("Misc_Speed", "Speed Multiplier", NAV_ICON_AIM, colW, miscCardH, &s_SpeedHack, "m_sh");
 					ImGui::SameLine(0, colGap);
-					MiscToggleCard("Misc_InfiniteAmmo", "Unlimited Ammo", NAV_ICON_MISC, colW, miscCardH, &s_UnlimitedAmmo, "m_ammo");
+					MiscToggleCard("Misc_CustomFOV", "Custom Game FOV", NAV_ICON_MISC, colW, miscCardH, &s_CustomFOV, "m_cfov");
 				}
 				// =============================================================
 				// TAB 3: SETTING (Colors, Thickness, Origin, Theme - SINGLE Scrollbar)

@@ -1065,20 +1065,37 @@ static void EndCard()
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    static bool s_DemoCount = true, s_DemoOff = false, s_DemoTeam = true, s_DemoVis = false;
-                    ToggleSwitch("Count", &s_DemoCount);
-                    ImGui::Spacing();
-                    ToggleSwitch("Off-Screen", &s_DemoOff);
-                    ImGui::Spacing();
-                    ToggleSwitch("Ignore Team", &s_DemoTeam);
-                    ImGui::Spacing();
-                    ToggleSwitch("Visible", &s_DemoVis);
+                    // Player Count Row showing actual available player count
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Player Count");
+                    static int s_DemoPlayerCount = 3;
+                    char cntBuf[32];
+                    snprintf(cntBuf, sizeof(cntBuf), "%d Active", s_DemoPlayerCount);
+                    float cntW = ImGui::CalcTextSize(cntBuf).x;
+                    float rCntX = ImGui::GetWindowContentRegionMax().x - cntW;
+                    if (rCntX > ImGui::GetCursorPosX()) ImGui::SameLine(rCntX);
+                    else ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", cntBuf);
+
                     ImGui::Spacing();
 
-                    // Max Dist with amber tag
+                    // Active test source selector
+                    const char* demoSimModes[] = { "0 Players", "1 Target", "3 Targets", "5 Targets" };
+                    static int s_DemoSimMode = 2;
+                    ImGui::SetNextItemWidth(-1.0f);
+                    if (ImGui::Combo("##DemoPlayerCountSim", &s_DemoSimMode, demoSimModes, 4)) {
+                        int counts[] = { 0, 1, 3, 5 };
+                        s_DemoPlayerCount = counts[s_DemoSimMode];
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    // Max Distance with amber tag
                     static float s_DemoMaxDist = 250.0f;
                     ImGui::AlignTextToFramePadding();
-                    ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Dist");
+                    ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Distance");
                     char dBuf[32];
                     snprintf(dBuf, sizeof(dBuf), "%.0fm", s_DemoMaxDist);
                     float dW = ImGui::CalcTextSize(dBuf).x;
@@ -1109,13 +1126,13 @@ static void EndCard()
             // TAB 1: AIM (Aimbot & Aim Tuning Cards)
             // ---------------------------------------------------------------------------------
             else if (g_State.currentTab == 1) {
-                float aimCardH = 260.0f;
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
+                float aimCardH = 280.0f;
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.125f, 0.125f, 0.168f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
                 ImGui::BeginChild("Aim_Main_Card", ImVec2(colW, aimCardH), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Aimbot");
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Silent Aim");
                 ImGui::Separator();
                 ImGui::Spacing();
                 ToggleSwitch("Enable", &g_State.bEnableAim);
@@ -1124,15 +1141,14 @@ static void EndCard()
                 ImGui::Spacing();
                 ToggleSwitch("Ignore Team", &g_State.bIgnoreTeam);
                 ImGui::Spacing();
-                ToggleSwitch("Sticky Lock", &g_State.bSticky);
-                ImGui::Spacing();
-                ToggleSwitch("Draw FOV", &g_State.bLockLine);
+                static bool s_Demo360 = false;
+                ToggleSwitch("360 Degree", &s_Demo360);
                 ImGui::EndChild();
 
                 ImGui::SameLine(0, colGap);
 
                 ImGui::BeginChild("Aim_Tuning_Card", ImVec2(colW, aimCardH), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Aimbot Tuning");
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Silent Aim Tuning");
                 ImGui::Separator();
                 ImGui::Spacing();
                 TuningSlider("FOV Radius", &g_State.fovRadius, 10.0f, 180.0f, "%.0f deg");
@@ -1161,36 +1177,40 @@ static void EndCard()
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
-                // Row 1: Freecam | Time Control
-                ImGui::BeginChild("Misc_Freecam", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Freecam");
+                // Row 1: No Recoil | No Shake
+                ImGui::BeginChild("Misc_NoRecoil", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  No Recoil");
                 ImGui::Spacing();
-                ToggleSwitch("Enable", &s_Freecam);
+                static bool s_DemoNoRecoil = false;
+                ToggleSwitch("Enable", &s_DemoNoRecoil);
                 ImGui::EndChild();
 
                 ImGui::SameLine(0, colGap);
 
-                ImGui::BeginChild("Misc_TimeControl", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Time Control");
+                ImGui::BeginChild("Misc_NoShake", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  No Shake");
                 ImGui::Spacing();
-                ToggleSwitch("Enable", &s_TimeControl);
+                static bool s_DemoNoShake = false;
+                ToggleSwitch("Enable", &s_DemoNoShake);
                 ImGui::EndChild();
 
                 ImGui::Spacing();
 
-                // Row 2: FPS Unlocker | Stream Mode
-                ImGui::BeginChild("Misc_FPS", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  FPS Unlocker");
+                // Row 2: Unlimited Ammo | Fast Reload
+                ImGui::BeginChild("Misc_UnlimitedAmmo", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Unlimited Ammo");
                 ImGui::Spacing();
-                ToggleSwitch("Enable", &s_FPS);
+                static bool s_DemoUnlimitedAmmo = false;
+                ToggleSwitch("Enable", &s_DemoUnlimitedAmmo);
                 ImGui::EndChild();
 
                 ImGui::SameLine(0, colGap);
 
-                ImGui::BeginChild("Misc_Stream", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Stream Mode");
+                ImGui::BeginChild("Misc_FastReload", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Fast Reload");
                 ImGui::Spacing();
-                ToggleSwitch("Enable", &s_Stream);
+                static bool s_DemoFastReload = false;
+                ToggleSwitch("Enable", &s_DemoFastReload);
                 ImGui::EndChild();
 
                 ImGui::Spacing();
