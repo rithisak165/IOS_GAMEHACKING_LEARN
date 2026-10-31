@@ -1433,15 +1433,14 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 					EndCard();
 				}
 
-				// Unified Scrollbar Hover Detection & Wheel Scrolling Handler
+				// Unified Scrollbar Hover Detection & Wheel Scrolling Handler (Safe geometric hit test)
 				ImGuiWindow* scrollWin = ImGui::GetCurrentWindow();
 				if (scrollWin && scrollWin->ScrollbarY)
 				{
-					ImRect scrollbarRect = ImGui::GetWindowScrollbarRect(scrollWin, ImGuiAxis_Y);
-					// Generous hover hit zone around the scrollbar track/grab
-					ImRect hoverRect = scrollbarRect;
-					hoverRect.Min.x -= 16.0f;
-					hoverRect.Max.x += 8.0f;
+					// Safe bounds on right edge of ContentScrollArea without calling GetWindowScrollbarRect (prevents assertion crash)
+					float rightEdge = scrollWin->Pos.x + scrollWin->Size.x;
+					float sbHitWidth = ImGui::GetStyle().ScrollbarSize + 16.0f;
+					ImRect hoverRect(ImVec2(rightEdge - sbHitWidth, scrollWin->Pos.y), ImVec2(rightEdge, scrollWin->Pos.y + scrollWin->Size.y));
 
 					ImGuiIO& io = ImGui::GetIO();
 					s_ScrollbarHovered = hoverRect.Contains(io.MousePos);
