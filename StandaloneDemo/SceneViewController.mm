@@ -425,7 +425,8 @@ struct DummyTarget {
     style.WindowRounding    = 12.0f;
     style.FrameRounding     = 8.0f;
     style.PopupRounding     = 8.0f;
-    style.ScrollbarRounding = 9.0f;
+    style.ScrollbarRounding = 10.0f;
+    style.ScrollbarSize     = 7.0f;
     style.GrabRounding      = 8.0f;
     style.ChildRounding     = 10.0f;
     style.WindowBorderSize  = 1.2f;
@@ -442,8 +443,10 @@ struct DummyTarget {
     style.Colors[ImGuiCol_CheckMark]        = ImVec4(1.0f, 0.54f, 0.0f, 1.00f);
     style.Colors[ImGuiCol_SliderGrab]       = ImVec4(1.0f, 0.54f, 0.0f, 1.00f);
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1.0f, 0.70f, 0.28f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0.08f, 0.08f, 0.10f, 0.60f);
-    style.Colors[ImGuiCol_ScrollbarGrab]    = ImVec4(1.0f, 0.54f, 0.0f, 0.65f);
+    style.Colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.08f, 0.08f, 0.11f, 0.75f);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(1.0f, 0.54f, 0.0f, 0.45f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1.0f, 0.55f, 0.0f, 0.95f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(1.0f, 0.72f, 0.25f, 1.0f);
     style.Colors[ImGuiCol_Text]             = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 
     ImGui_ImplMetal_Init(_device);
@@ -988,7 +991,7 @@ static void EndCard()
             ImGui::Spacing();
 
             // ── Single Scrollable Region With Unified Vertical Scrollbar ──
-            ImGui::BeginChild("ContentScrollArea", ImVec2(0, 0), false, ImGuiWindowFlags_None);
+            ImGui::BeginChild("ContentScrollArea", ImVec2(0, 0), false, ImGuiWindowFlags_NoScrollWithMouse);
             {
                 float contentW = ImGui::GetContentRegionAvail().x;
                 float colGap = 10.0f;
@@ -1295,6 +1298,27 @@ static void EndCard()
 
                 ImGui::PopStyleVar(2);
                 ImGui::PopStyleColor();
+            }
+
+            // Unified Scrollbar Hover Detection & Wheel Scrolling Handler
+            ImGuiWindow* scrollWin = ImGui::GetCurrentWindow();
+            if (scrollWin && scrollWin->ScrollbarY)
+            {
+                ImRect scrollbarRect = ImGui::GetWindowScrollbarRect(scrollWin, ImGuiAxis_Y);
+                // Generous hover hit zone around the scrollbar track/grab
+                ImRect hoverRect = scrollbarRect;
+                hoverRect.Min.x -= 16.0f;
+                hoverRect.Max.x += 8.0f;
+
+                ImGuiIO& io = ImGui::GetIO();
+                bool isHovered = hoverRect.Contains(io.MousePos);
+
+                // Only scroll when hovering directly over the scrollbar!
+                if (isHovered && fabsf(io.MouseWheel) > 0.0f) {
+                    float max_step = scrollWin->InnerRect.GetHeight() * 0.67f;
+                    float scroll_step = ImFloor(ImMin(5.0f * scrollWin->CalcFontSize(), max_step));
+                    ImGui::SetScrollY(scrollWin, scrollWin->Scroll.y - io.MouseWheel * scroll_step);
+                }
             }
             ImGui::EndChild(); // ContentScrollArea
         }
