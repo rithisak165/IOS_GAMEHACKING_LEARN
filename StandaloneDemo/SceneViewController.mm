@@ -874,10 +874,7 @@ static void EndCard()
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 12.0f));
         ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0.0f), true, ImGuiWindowFlags_NoScrollbar);
 
-        // Sidebar Logo Header & Permanent Branding
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "  0xSAK");
-        ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 0.90f), "  @rithysak_meng");
+        // Sidebar Logo Header
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();

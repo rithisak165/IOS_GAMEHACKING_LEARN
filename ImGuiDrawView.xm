@@ -383,37 +383,45 @@ static bool MiscToggleCard(const char* id, const char* title, NavIcon icon, floa
 	return *v;
 }
 
-// Right-Aligned Pill Toggle Switch (Matching Reference Screenshot)
+// Full-Row Interactive Toggle Switch (Mobile Touch Optimized & Highly Responsive)
 static bool CardToggle(const char* label, bool* v, const char* id_suffix)
 {
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
 	if (window->SkipItems)
 		return false;
 
-	float height = 22.0f;
-	float width = 42.0f;
-	float radius = height * 0.5f;
+	float height = 24.0f;
+	float toggleW = 42.0f;
+	float toggleH = 22.0f;
+	float radius = toggleH * 0.5f;
 
-	// Label on the Left
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "%s", label);
+	float availW = ImGui::GetContentRegionAvail().x;
+	ImVec2 pos = window->DC.CursorPos;
+	ImRect rowRect(pos, ImVec2(pos.x + availW, pos.y + height));
 
-	// Toggle Button positioned at Far Right
-	float rightX = ImGui::GetWindowContentRegionMax().x - width;
-	if (rightX > ImGui::GetCursorPosX()) {
-		ImGui::SameLine(rightX);
-	} else {
-		ImGui::SameLine();
-	}
+	std::string btnId = std::string("##row_tog_") + label + (id_suffix ? id_suffix : "");
+	const ImGuiID id = window->GetID(btnId.c_str());
 
-	std::string btnId = std::string("##card_tog_") + label + (id_suffix ? id_suffix : "");
-	bool clicked = ImGui::InvisibleButton(btnId.c_str(), ImVec2(width, height));
-	if (clicked) {
+	ImGui::ItemSize(rowRect.GetSize(), 0.0f);
+	if (!ImGui::ItemAdd(rowRect, id))
+		return false;
+
+	bool hovered, held;
+	bool pressed = ImGui::ButtonBehavior(rowRect, id, &hovered, &held);
+	if (pressed) {
 		*v = !(*v);
 	}
 
-	ImVec2 btnMin = ImGui::GetItemRectMin();
-	ImVec2 btnMax = ImGui::GetItemRectMax();
+	// Label on the Left
+	ImVec2 labelPos(rowRect.Min.x + 2.0f, rowRect.Min.y + (height - ImGui::GetFontSize()) * 0.5f);
+	ImU32 textCol = *v ? IM_COL32(245, 245, 250, 255) : IM_COL32(185, 185, 200, 240);
+	window->DrawList->AddText(labelPos, textCol, label);
+
+	// Toggle Switch on the Far Right
+	float rightX = rowRect.Max.x - toggleW;
+	float toggleY = rowRect.Min.y + (height - toggleH) * 0.5f;
+	ImVec2 btnMin(rightX, toggleY);
+	ImVec2 btnMax(rightX + toggleW, toggleY + toggleH);
 
 	ImDrawList* drawList = window->DrawList;
 	ImU32 bgCol = *v ? IM_COL32(255, 138, 0, 245) : IM_COL32(46, 46, 60, 240);
@@ -427,7 +435,7 @@ static bool CardToggle(const char* label, bool* v, const char* id_suffix)
 
 	// Sliding White Knob
 	float t = *v ? 1.0f : 0.0f;
-	float knobX = btnMin.x + radius + t * (width - 2.0f * radius);
+	float knobX = btnMin.x + radius + t * (toggleW - 2.0f * radius);
 	drawList->AddCircleFilled(ImVec2(knobX, btnMin.y + radius), radius - 2.5f, IM_COL32(255, 255, 255, 255));
 
 	return *v;
@@ -699,45 +707,61 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 	self.mtkView.clipsToBounds = YES;
 }
 
+// Window Draggable Position State
+static ImVec2 s_MenuPos(100.0f, 50.0f);
+static bool s_PosInitialized = false;
+static bool s_IsDraggingHeader = false;
+static ImVec2 s_DragStartMouse(0, 0);
+static ImVec2 s_DragStartMenuPos(0, 0);
+
 #pragma mark - Touch Interaction
-
-- (void)updateIOWithTouchEvent:(UIEvent *)event
-{
-	UITouch *anyTouch = event.allTouches.anyObject;
-	CGPoint touchLocation = [anyTouch locationInView:self.view];
-	ImGuiIO &io = ImGui::GetIO();
-	io.MousePos = ImVec2(touchLocation.x, touchLocation.y);
-
-	BOOL hasActiveTouch = NO;
-	for (UITouch *touch in event.allTouches)
-	{
-		if (touch.phase != UITouchPhaseEnded && touch.phase != UITouchPhaseCancelled)
-		{
-			hasActiveTouch = YES;
-			break;
-		}
-	}
-	io.MouseDown[0] = hasActiveTouch;
-}
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
 {
-	[self updateIOWithTouchEvent:event];
+	UITouch *touch = [touches anyObject];
+	if (!touch) return;
+	CGPoint loc = [touch locationInView:self.view];
+	ImGuiIO &io = ImGui::GetIO();
+	io.AddMousePosEvent((float)loc.x, (float)loc.y);
+	io.AddMouseButtonEvent(0, true);
 }
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
 {
-	[self updateIOWithTouchEvent:event];
-}
+	UITouch *touch = [touches anyObject];
+	if (!touch) return;
+	CGPoint loc = [touch locationInView:self.view];
+	CGPoint prevLoc = [touch previousLocationInView:self.view];
+	ImGuiIO &io = ImGui::GetIO();
+	io.AddMousePosEvent((float)loc.x, (float)loc.y);
 
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
-{
-	[self updateIOWithTouchEvent:event];
+	// Touch-drag scrolling for ImGui scrollable child containers when not dragging the header
+	if (!s_IsDraggingHeader) {
+		float deltaY = (float)(loc.y - prevLoc.y);
+		if (fabsf(deltaY) > 0.5f) {
+			io.AddMouseWheelEvent(0.0f, deltaY * 0.12f);
+		}
+	}
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
 {
-	[self updateIOWithTouchEvent:event];
+	UITouch *touch = [touches anyObject];
+	if (!touch) return;
+	CGPoint loc = [touch locationInView:self.view];
+	ImGuiIO &io = ImGui::GetIO();
+	io.AddMousePosEvent((float)loc.x, (float)loc.y);
+	io.AddMouseButtonEvent(0, false);
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
+{
+	UITouch *touch = [touches anyObject];
+	if (!touch) return;
+	CGPoint loc = [touch locationInView:self.view];
+	ImGuiIO &io = ImGui::GetIO();
+	io.AddMousePosEvent((float)loc.x, (float)loc.y);
+	io.AddMouseButtonEvent(0, false);
 }
 
 #pragma mark - Rendering Loop
@@ -791,10 +815,22 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 		g_bNoRecoil    = s_NoRecoil;
 		g_bInfiniteAmmo = s_UnlimitedAmmo;
 
+		float minPosX = safeMarginX;
+		float maxPosX = fmaxf(safeMarginX, screenW - winW - safeMarginX);
+		float minPosY = safeMarginY;
+		float maxPosY = fmaxf(safeMarginY, screenH - winH - safeMarginY);
+
+		if (!s_PosInitialized) {
+			s_MenuPos = ImVec2(posX, posY);
+			s_PosInitialized = true;
+		}
+		s_MenuPos.x = fmaxf(minPosX, fminf(maxPosX, s_MenuPos.x));
+		s_MenuPos.y = fmaxf(minPosY, fminf(maxPosY, s_MenuPos.y));
+
 		if (MenDeal)
 		{
-			ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_FirstUseEver);
-			ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowPos(s_MenuPos, ImGuiCond_Always);
+			ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_Always);
 
 			ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar;
 			ImGui::Begin("OXSAK_PANEL", &MenDeal, winFlags);
@@ -818,16 +854,6 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 					ImGui::Image((__bridge void *)s_LogoTexture, ImVec2(logoSize, logoSize));
 				}
 				
-				// Permanent Sidebar Branding (Always Visible Across All Tabs)
-				ImGui::Spacing();
-				float titleW = ImGui::CalcTextSize("0xSAK").x;
-				ImGui::SetCursorPosX((sidebarW - titleW) * 0.5f - 6.0f);
-				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "0xSAK");
-
-				float devW = ImGui::CalcTextSize("DEV: @rithysak_meng").x;
-				ImGui::SetCursorPosX((sidebarW - devW) * 0.5f - 6.0f);
-				ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 0.90f), "DEV: @rithysak_meng");
-
 				ImGui::Spacing();
 				ImGui::Separator();
 				ImGui::Spacing();
@@ -877,14 +903,34 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 			// =================================================================
 			ImGui::BeginGroup();
 			{
-				// ── Permanent Header Bar (Visible on ESP, AIM, MISC, SETTING - Never Hidden by Scrolling) ──
-				float headerH = 32.0f;
+				// ── Dedicated Draggable Header Area (One Clean Instance of Branding & DEV) ──
+				float headerH = 34.0f;
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.095f, 0.095f, 0.125f, 0.95f));
 				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.20f, 0.28f, 0.65f));
 				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 5.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 6.0f));
 				ImGui::BeginChild("OXSAK_Permanent_Header", ImVec2(0, headerH), true, ImGuiWindowFlags_NoScrollbar);
 				{
+					// Dedicated Window Dragging Handle via Header
+					ImVec2 hMin = ImGui::GetWindowPos();
+					ImVec2 hMax = ImVec2(hMin.x + ImGui::GetWindowWidth(), hMin.y + headerH);
+
+					if (ImGui::IsMouseHoveringRect(hMin, hMax) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+						s_IsDraggingHeader = true;
+						s_DragStartMouse = io.MousePos;
+						s_DragStartMenuPos = s_MenuPos;
+					}
+					if (s_IsDraggingHeader) {
+						if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+							s_MenuPos.x = s_DragStartMenuPos.x + (io.MousePos.x - s_DragStartMouse.x);
+							s_MenuPos.y = s_DragStartMenuPos.y + (io.MousePos.y - s_DragStartMouse.y);
+							s_MenuPos.x = fmaxf(minPosX, fminf(maxPosX, s_MenuPos.x));
+							s_MenuPos.y = fmaxf(minPosY, fminf(maxPosY, s_MenuPos.y));
+						} else {
+							s_IsDraggingHeader = false;
+						}
+					}
+
 					ImDrawList* dList = ImGui::GetWindowDrawList();
 					ImVec2 cp = ImGui::GetCursorScreenPos();
 
@@ -893,24 +939,22 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 
 					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 26.0f);
 					ImGui::AlignTextToFramePadding();
-					ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "0xSAK");
 
-					ImGui::SameLine();
-					ImGui::TextColored(ImVec4(0.40f, 0.40f, 0.50f, 0.8f), "|");
-
-					ImGui::SameLine();
 					const char* tabNames[] = { "ESP MODULE", "AIM ASSIST", "MISCELLANEOUS", "SETTINGS" };
-					ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.90f, 0.95f), "%s", tabNames[s_SelectedTab]);
+					char headerTitle[64];
+					snprintf(headerTitle, sizeof(headerTitle), "0xSAK | %s", tabNames[s_SelectedTab]);
+					ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "%s", headerTitle);
 
 					const char* devLabel = "DEV: @rithysak_meng";
 					float devW = ImGui::CalcTextSize(devLabel).x;
-					float rightX = ImGui::GetWindowContentRegionMax().x - devW;
-					if (rightX > ImGui::GetCursorPosX()) {
+					float contentMaxX = ImGui::GetWindowContentRegionMax().x;
+					float rightX = contentMaxX - devW - 6.0f;
+					float curX = ImGui::GetCursorPosX();
+
+					if (rightX > curX + 16.0f) {
 						ImGui::SameLine(rightX);
-					} else {
-						ImGui::SameLine();
+						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", devLabel);
 					}
-					ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", devLabel);
 				}
 				ImGui::EndChild();
 				ImGui::PopStyleVar(2);

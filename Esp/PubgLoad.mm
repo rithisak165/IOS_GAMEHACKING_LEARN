@@ -162,8 +162,8 @@ static const NSInteger kOXSAKLauncherTag = 0x5A5;
         self->_vna = [ImGuiDrawView sharedInstance];
         self->_vna.view.tag = kOXSAKOverlayTag;
 
-        self->_isMenuOpen = YES;
-        [ImGuiDrawView showChange:YES];
+        self->_isMenuOpen = NO;
+        [ImGuiDrawView showChange:NO];
 
         [self setupFloatingButton];
         [self tryAttachView];
@@ -205,7 +205,7 @@ static const NSInteger kOXSAKLauncherTag = 0x5A5;
 {
     UIWindow *window = [PubgLoad findKeyWindow];
     if (window) {
-        UIView *targetContainer = (window.rootViewController && window.rootViewController.view) ? window.rootViewController.view : window;
+        UIView *targetContainer = window; // Attach directly to UIWindow for clean presentation above root view and safe modal dialog flow
         
         // Remove any stale duplicate overlays if present
         for (UIView *subview in targetContainer.subviews) {
@@ -272,8 +272,9 @@ static const NSInteger kOXSAKLauncherTag = 0x5A5;
 
 - (void)toggleMenu
 {
-    _isMenuOpen = !_isMenuOpen;
-    [ImGuiDrawView showChange:_isMenuOpen];
+    BOOL open = ![ImGuiDrawView isMenuOpen];
+    _isMenuOpen = open;
+    [ImGuiDrawView showChange:open];
 }
 
 @end
