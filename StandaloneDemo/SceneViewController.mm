@@ -849,17 +849,30 @@ static void EndCard()
 
 - (void)renderOXSAKMenu
 {
-    CGFloat screenW = self.view.bounds.size.width;
-    CGFloat screenH = self.view.bounds.size.height;
+    CGFloat screenW = fmaxf(self.view.bounds.size.width, self.view.bounds.size.height);
+    CGFloat screenH = fminf(self.view.bounds.size.width, self.view.bounds.size.height);
 
-    // Responsive scaling with iPhone notch & safe-area margins
-    CGFloat safeMarginX = (screenW > 600.0f) ? 20.0f : 12.0f;
-    CGFloat safeMarginY = 16.0f;
-    CGFloat menuW = fminf(710.0f, screenW - (safeMarginX * 2.0f));
-    CGFloat menuH = fminf(405.0f, screenH - (safeMarginY * 2.0f));
+    // Responsive scaling with compact reference dimensions
+    CGFloat safeMarginX = 14.0f;
+    CGFloat safeMarginY = 12.0f;
+    CGFloat menuW = fminf(575.0f, screenW - (safeMarginX * 2.0f));
+    CGFloat menuH = fminf(335.0f, screenH - (safeMarginY * 2.0f));
+
+    static ImVec2 s_DemoMenuPos(100.0f, 40.0f);
+    static bool s_DemoPosInit = false;
+    if (!s_DemoPosInit) {
+        s_DemoMenuPos = ImVec2((screenW - menuW) * 0.5f, (screenH - menuH) * 0.5f);
+        s_DemoPosInit = true;
+    }
+    float minX = safeMarginX;
+    float maxX = fmaxf(minX, screenW - menuW - safeMarginX);
+    float minY = safeMarginY;
+    float maxY = fmaxf(minY, screenH - menuH - safeMarginY);
+    s_DemoMenuPos.x = fmaxf(minX, fminf(maxX, s_DemoMenuPos.x));
+    s_DemoMenuPos.y = fmaxf(minY, fminf(maxY, s_DemoMenuPos.y));
 
     ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(ImVec2((screenW - menuW) / 2.0f, (screenH - menuH) / 2.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(s_DemoMenuPos, ImGuiCond_Always);
 
     ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar;
 
@@ -931,20 +944,31 @@ static void EndCard()
         {
             // ── Permanent Header Bar (Visible on ESP, AIM, MISC, SETTING - Never Hidden by Scrolling) ──
             float headerH = 32.0f;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.095f, 0.095f, 0.125f, 0.95f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.20f, 0.28f, 0.65f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.095f, 0.088f, 0.145f, 0.95f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.18f, 0.32f, 0.65f));
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 5.0f));
             ImGui::BeginChild("OXSAK_Demo_Header", ImVec2(0, headerH), true, ImGuiWindowFlags_NoScrollbar);
             {
+                ImGuiIO &io = ImGui::GetIO();
+                ImGui::SetCursorPos(ImVec2(0, 0));
+                ImGui::InvisibleButton("##DemoHeaderDrag", ImVec2(ImGui::GetContentRegionAvail().x, headerH));
+                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
+                    s_DemoMenuPos.x += io.MouseDelta.x;
+                    s_DemoMenuPos.y += io.MouseDelta.y;
+                    s_DemoMenuPos.x = fmaxf(minX, fminf(maxX, s_DemoMenuPos.x));
+                    s_DemoMenuPos.y = fmaxf(minY, fminf(maxY, s_DemoMenuPos.y));
+                }
+
+                ImGui::SetCursorPos(ImVec2(10.0f, 6.0f));
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#] 0xSAK");
+                ImGui::TextColored(ImVec4(0.97f, 0.97f, 0.99f, 1.0f), "[#] 0xSAK");
 
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.40f, 0.40f, 0.50f, 0.8f), "|");
+                ImGui::TextColored(ImVec4(0.55f, 0.40f, 0.85f, 0.8f), "|");
 
                 ImGui::SameLine();
-                const char* tabNames[] = { "ESP MODULE", "AIM ASSIST", "MISCELLANEOUS", "SETTINGS" };
+                const char* tabNames[] = { "ESP MODULE", "AIMBOT ASSIST", "MISCELLANEOUS", "SETTINGS" };
                 ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.90f, 0.95f), "%s", tabNames[g_State.currentTab]);
 
                 const char* devLabel = "DEV: @rithysak_meng";
