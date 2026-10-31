@@ -10,11 +10,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ImGuiDrawView : UIViewController
 
-///
++ (instancetype)sharedInstance;
 + (void)showChange:(BOOL)open;
 + (BOOL)isMenuOpen;
 + (void)clearData;
-
 
 @end
 

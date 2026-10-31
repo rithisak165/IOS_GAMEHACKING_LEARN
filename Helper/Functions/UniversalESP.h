@@ -64,9 +64,15 @@ struct ESPSettings {
     bool   bCornerBox   = false;                     // Corner Box Style
     bool   bLine        = true;                      // Snapline
     int    lineOrigin   = 2;                         // 0: Top, 1: Middle, 2: Bottom
+    bool   bName        = true;                      // Player name
     bool   bDistance    = true;                      // Distance text
-    bool   bSkeleton    = true;                      // Articulated Skeleton ESP
     bool   bHealth      = true;                      // Health Bar
+    bool   bSkeleton    = true;                      // Articulated Skeleton ESP
+    bool   bCount       = true;                      // Player Count badge
+    bool   bOffScreen   = false;                     // Off-Screen directional arrows
+    bool   bIgnoreTeam  = true;                      // Filter teammates
+    bool   bVisibleOnly = false;                     // Visibility filter
+    float  maxDistance  = 250.0f;                    // Max render distance in meters
     bool   bDrawSelf    = false;                     // Draw box on local player (diagnostic)
     float  topPosFloat  = 1.85f;                     // Head offset (height in meters)
     float  botPosFloat  = 0.00f;                     // Feet offset

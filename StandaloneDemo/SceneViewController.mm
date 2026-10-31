@@ -974,177 +974,155 @@ static void EndCard()
                 float colW = (contentW - colGap) * 0.5f;
 
             // ---------------------------------------------------------------------------------
-            // TAB 0: ESP (Compact Master Enable + Box Underneath + 2-Column Grid)
+            // TAB 0: ESP (Sub-Navigation + Player ESP & Extras Cards - Image 2)
             // ---------------------------------------------------------------------------------
             if (g_State.currentTab == 0) {
-                // 1. Compact Enable ESP Master Card at the Very Top
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, g_State.bEnableESP ? ImVec4(0.125f, 0.115f, 0.180f, 0.98f) : ImVec4(0.095f, 0.095f, 0.130f, 0.92f));
-                ImGui::PushStyleColor(ImGuiCol_Border, g_State.bEnableESP ? ImVec4(1.0f, 0.54f, 0.0f, 0.75f) : ImVec4(0.20f, 0.20f, 0.28f, 0.60f));
-                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 9.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 5.0f));
-
-                ImGui::BeginChild("Demo_Master_Card", ImVec2(contentW, 46.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ToggleSwitch("Enable ESP", &g_State.bEnableESP);
-                if (g_State.bEnableESP) {
-                    ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Master ESP: ACTIVE (All visual layers enabled)");
-                } else {
-                    ImGui::TextColored(ImVec4(0.58f, 0.58f, 0.66f, 0.85f), "Master ESP: DISABLED (Options locked until enabled)");
+                // Sub-navigation bar matching reference screenshot
+                const char* espSubTabs[] = { "Players", "Loot", "Mineral", "Animal" };
+                static int s_DemoSubTab = 0;
+                for (int st = 0; st < 4; st++) {
+                    bool isSubActive = (s_DemoSubTab == st);
+                    if (isSubActive) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.16f, 0.36f, 0.95f)); // Active purple pill
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                    } else {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent inactive
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.60f, 0.70f, 1.0f));
+                    }
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+                    if (ImGui::Button(espSubTabs[st], ImVec2(72.0f, 26.0f))) {
+                        s_DemoSubTab = st;
+                    }
+                    ImGui::PopStyleVar();
+                    ImGui::PopStyleColor(2);
+                    ImGui::SameLine(0, 6.0f);
                 }
-                ImGui::EndChild();
-
-                ImGui::PopStyleVar(2);
-                ImGui::PopStyleColor(2);
-
+                ImGui::NewLine();
                 ImGui::Spacing();
 
-                // Individual options visibly dimmed and disabled when master switch is OFF
-                bool espMasterOn = g_State.bEnableESP;
-                if (!espMasterOn) {
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.38f);
-                }
-                ImGui::BeginDisabled(!espMasterOn);
-                {
+                if (s_DemoSubTab == 0) {
+                    float cardH = 285.0f;
                     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
-                    
-                    // 2. Box Card (Immediately underneath Enable ESP)
-                    float boxH = g_State.bBox ? 134.0f : 78.0f;
-                    ImGui::BeginChild("Demo_Box_Card", ImVec2(contentW, boxH), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#]  Box");
+
+                    // Left Card: Player ESP
+                    ImGui::BeginChild("Demo_Player_Card", ImVec2(colW, cardH), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#]  Player ESP");
                     ImGui::Separator();
                     ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bBox);
-                    if (g_State.bBox) {
+
+                    ToggleSwitch("Enable", &g_State.bEnableESP);
+                    ImGui::Spacing();
+
+                    bool espOn = g_State.bEnableESP;
+                    if (!espOn) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.38f);
+                    ImGui::BeginDisabled(!espOn);
+                    {
+                        ToggleSwitch("Lines", &g_State.bSnaplines);
                         ImGui::Spacing();
-                        static int boxStyle = 0;
-                        const char *styles[] = { "Square", "Corner" };
-                        ImGui::SetNextItemWidth(-1.0f);
-                        ImGui::Combo("##DemoBoxStyle", &boxStyle, styles, 2);
+                        ToggleSwitch("Box", &g_State.bBox);
                         ImGui::Spacing();
-                        float sliderW = (ImGui::GetContentRegionAvail().x - colGap) * 0.5f;
-                        ImGui::BeginGroup();
-                        TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
-                        ImGui::EndGroup();
-                        ImGui::SameLine(0, colGap);
-                        ImGui::BeginGroup();
-                        TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
-                        ImGui::EndGroup();
+                        static bool s_DemoName = true;
+                        ToggleSwitch("Name", &s_DemoName);
+                        ImGui::Spacing();
+                        ToggleSwitch("Distance", &g_State.bDistance);
+                        ImGui::Spacing();
+                        ToggleSwitch("Health", &g_State.bHealth);
+                        ImGui::Spacing();
+                        ToggleSwitch("Skeleton", &g_State.bSkeleton);
                     }
-                    ImGui::EndChild();
-
-                    ImGui::Spacing();
-
-                    // 3. Balanced 2-Column Grid for Remaining 4 Feature Cards (Line, Health, Skeleton, Distance)
-                    // Row 1: Left = Line (90pt), Right = Health Bar (90pt)
-                    ImGui::BeginChild("Demo_Line_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Line");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bSnaplines);
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Target tracer from screen origin");
+                    ImGui::EndDisabled();
+                    if (!espOn) ImGui::PopStyleVar();
                     ImGui::EndChild();
 
                     ImGui::SameLine(0, colGap);
 
-                    ImGui::BeginChild("Demo_Health_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Health Bar");
+                    // Right Card: Extras (Matching Image 2)
+                    ImGui::BeginChild("Demo_Extras_Card", ImVec2(colW, cardH), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Extras");
                     ImGui::Separator();
                     ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bHealth);
+
+                    static bool s_DemoCount = true, s_DemoOff = false, s_DemoTeam = true, s_DemoVis = false;
+                    ToggleSwitch("Count", &s_DemoCount);
                     ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic vertical health indicator");
-                    ImGui::EndChild();
+                    ToggleSwitch("Off-Screen", &s_DemoOff);
+                    ImGui::Spacing();
+                    ToggleSwitch("Ignore Team", &s_DemoTeam);
+                    ImGui::Spacing();
+                    ToggleSwitch("Visible", &s_DemoVis);
+                    ImGui::Spacing();
+
+                    // Max Dist with purple tag
+                    static float s_DemoMaxDist = 250.0f;
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Dist");
+                    char dBuf[32];
+                    snprintf(dBuf, sizeof(dBuf), "%.0fm", s_DemoMaxDist);
+                    float dW = ImGui::CalcTextSize(dBuf).x;
+                    float rX = ImGui::GetWindowContentRegionMax().x - dW;
+                    if (rX > ImGui::GetCursorPosX()) ImGui::SameLine(rX);
+                    else ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(0.68f, 0.50f, 0.95f, 1.0f), "%s", dBuf);
+
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::SliderFloat("##DemoMaxDistSlider", &s_DemoMaxDist, 20.0f, 500.0f, "");
 
                     ImGui::Spacing();
+                    static int boxStyle = 0;
+                    const char *styles[] = { "Square", "Corner" };
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::Combo("##DemoBoxStyle", &boxStyle, styles, 2);
 
-                    // Row 2: Left = Skeleton (90pt), Right = Distance (90pt)
-                    ImGui::BeginChild("Demo_Skel_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Skeleton");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bSkeleton);
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "15 Articulated bones & stride");
-                    ImGui::EndChild();
-
-                    ImGui::SameLine(0, colGap);
-
-                    ImGui::BeginChild("Demo_Dist_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Distance");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bDistance);
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Real-time range tags in meters");
                     ImGui::EndChild();
 
                     ImGui::PopStyleVar(2);
                     ImGui::PopStyleColor();
-                }
-                ImGui::EndDisabled();
-                if (!espMasterOn) {
-                    ImGui::PopStyleVar();
+                } else {
+                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Sub-module active");
                 }
             }
 
             // ---------------------------------------------------------------------------------
-            // TAB 1: AIM (Aimbot & Silent Aim Card Grid)
+            // TAB 1: AIM (Aimbot & Aim Tuning Cards)
             // ---------------------------------------------------------------------------------
             else if (g_State.currentTab == 1) {
+                float aimCardH = 260.0f;
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
-                // Row 1: Left = Aimbot (185pt), Right = Aimbot Tuning (185pt)
-                ImGui::BeginChild("Aim_Main_Card", ImVec2(colW, 185.0f), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::BeginChild("Aim_Main_Card", ImVec2(colW, aimCardH), true, ImGuiWindowFlags_NoScrollbar);
                 ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Aimbot");
                 ImGui::Separator();
                 ImGui::Spacing();
                 ToggleSwitch("Enable", &g_State.bEnableAim);
+                ImGui::Spacing();
                 ToggleSwitch("Visible Check", &g_State.bVisibleOnly);
+                ImGui::Spacing();
                 ToggleSwitch("Ignore Team", &g_State.bIgnoreTeam);
+                ImGui::Spacing();
                 ToggleSwitch("Sticky Lock", &g_State.bSticky);
+                ImGui::Spacing();
+                ToggleSwitch("Draw FOV", &g_State.bLockLine);
                 ImGui::EndChild();
 
                 ImGui::SameLine(0, colGap);
 
-                ImGui::BeginChild("Aim_Tuning_Card", ImVec2(colW, 185.0f), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::BeginChild("Aim_Tuning_Card", ImVec2(colW, aimCardH), true, ImGuiWindowFlags_NoScrollbar);
                 ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Aimbot Tuning");
                 ImGui::Separator();
                 ImGui::Spacing();
-                ToggleSwitch("Draw FOV", &g_State.bLockLine);
-                ImGui::Spacing();
-                TuningSlider("FOV Radius", &g_State.fovRadius, 10.0f, 300.0f, "%.0f");
+                TuningSlider("FOV Radius", &g_State.fovRadius, 10.0f, 180.0f, "%.0f deg");
                 ImGui::Spacing();
                 TuningSlider("Smoothness", &g_State.smoothness, 1.0f, 30.0f, "%.1f");
-                ImGui::EndChild();
-
                 ImGui::Spacing();
-
-                // Row 2: Left = Silent Aim (185pt), Right = Silent Tuning (185pt)
-                ImGui::BeginChild("Silent_Main_Card", ImVec2(colW, 185.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Silent Aim");
-                ImGui::Separator();
-                ImGui::Spacing();
-                ToggleSwitch("Enable##silent", &g_State.bAutoShoot);
-                ToggleSwitch("Auto Fire", &g_State.bAutoShoot);
-                ImGui::Spacing();
-                TuningSlider("Max Turn", &g_State.maxTurn, 0.0f, 180.0f, "%.1f");
-                ImGui::EndChild();
-
-                ImGui::SameLine(0, colGap);
-
-                ImGui::BeginChild("Silent_Tuning_Card", ImVec2(colW, 185.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Silent Targeting");
-                ImGui::Separator();
-                ImGui::Spacing();
-                TuningSlider("Silent FOV", &g_State.fovRadius, 5.0f, 90.0f, "%.0f");
-                ImGui::Spacing();
-                TuningSlider("Reaction", &g_State.reactionMs, 0.0f, 500.0f, "%.0fms");
-                ImGui::Spacing();
-                TuningSlider("Jitter", &g_State.jitter, 0.0f, 0.5f, "%.2f");
+                ImGui::TextUnformatted("Target Bone");
+                ImGui::SetNextItemWidth(-1.0f);
+                const char* bones[] = { "Head", "Neck", "Chest", "Pelvis" };
+                static int boneIdx = 0;
+                ImGui::Combo("##AimBoneDemo", &boneIdx, bones, 4);
                 ImGui::EndChild();
 
                 ImGui::PopStyleVar(2);
@@ -1152,35 +1130,80 @@ static void EndCard()
             }
 
             // ---------------------------------------------------------------------------------
-            // TAB 2: MISC
+            // TAB 2: MISC (Matching Reference Image 1)
             // ---------------------------------------------------------------------------------
             else if (g_State.currentTab == 2) {
+                float miscCardH = 82.0f;
+                static bool s_Freecam = false, s_TimeControl = false, s_FPS = false, s_Stream = false, s_Melee = false, s_Wm = true, s_Recoil = false, s_Ammo = false;
+                
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
-                // Row 1: Left = Telemetry (180pt), Right = Engine Metrics (180pt)
-                ImGui::BeginChild("Misc_Telemetry_Card", ImVec2(colW, 180.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Telemetry");
-                ImGui::Separator();
+                // Row 1: Freecam | Time Control
+                ImGui::BeginChild("Misc_Freecam", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Freecam");
                 ImGui::Spacing();
-                for (size_t i = 0; i < fmin((size_t)3, _dummies.size()); i++) {
-                    const auto &d = _dummies[i];
-                    SCNVector3 pos = [d.rootNode.presentationNode convertPosition:SCNVector3Zero toNode:nil];
-                    ImGui::Text("[%zu] %s: %.0f HP", i + 1, d.name.c_str(), d.health);
-                }
+                ToggleSwitch("Enable", &s_Freecam);
                 ImGui::EndChild();
 
                 ImGui::SameLine(0, colGap);
 
-                ImGui::BeginChild("Misc_Metrics_Card", ImVec2(colW, 180.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Engine Metrics");
-                ImGui::Separator();
+                ImGui::BeginChild("Misc_TimeControl", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Time Control");
                 ImGui::Spacing();
-                ImGui::Text("Framerate: %.0f FPS", ImGui::GetIO().Framerate);
-                ImGui::Text("Display: %.0fx%.0f", ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-                ImGui::Text("Camera Dist: %.1fm", _cameraDistance);
-                ImGui::Text("Renderer: Metal 3.0");
+                ToggleSwitch("Enable", &s_TimeControl);
+                ImGui::EndChild();
+
+                ImGui::Spacing();
+
+                // Row 2: FPS Unlocker | Stream Mode
+                ImGui::BeginChild("Misc_FPS", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  FPS Unlocker");
+                ImGui::Spacing();
+                ToggleSwitch("Enable", &s_FPS);
+                ImGui::EndChild();
+
+                ImGui::SameLine(0, colGap);
+
+                ImGui::BeginChild("Misc_Stream", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Stream Mode");
+                ImGui::Spacing();
+                ToggleSwitch("Enable", &s_Stream);
+                ImGui::EndChild();
+
+                ImGui::Spacing();
+
+                // Row 3: Auto Melee Attack | Watermark
+                ImGui::BeginChild("Misc_Melee", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Auto Melee Attack");
+                ImGui::Spacing();
+                ToggleSwitch("Enable", &s_Melee);
+                ImGui::EndChild();
+
+                ImGui::SameLine(0, colGap);
+
+                ImGui::BeginChild("Misc_Watermark", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Watermark HUD");
+                ImGui::Spacing();
+                ToggleSwitch("Enable", &s_Wm);
+                ImGui::EndChild();
+
+                ImGui::Spacing();
+
+                // Row 4: Compensated Recoil | Unlimited Ammo
+                ImGui::BeginChild("Misc_NoRecoil", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Compensated Recoil");
+                ImGui::Spacing();
+                ToggleSwitch("Enable", &s_Recoil);
+                ImGui::EndChild();
+
+                ImGui::SameLine(0, colGap);
+
+                ImGui::BeginChild("Misc_InfiniteAmmo", ImVec2(colW, miscCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Unlimited Ammo");
+                ImGui::Spacing();
+                ToggleSwitch("Enable", &s_Ammo);
                 ImGui::EndChild();
 
                 ImGui::PopStyleVar(2);
@@ -1191,12 +1214,13 @@ static void EndCard()
             // TAB 3: SETTING (Colors, Thickness, Origin, Theme - SINGLE Scrollbar)
             // ---------------------------------------------------------------------------------
             else if (g_State.currentTab == 3) {
+                float setCardH = 260.0f;
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
-                // Row 1: Left = ESP Colors (160pt), Right = Outline Thickness (160pt)
-                ImGui::BeginChild("Set_Colors_Card", ImVec2(colW, 160.0f), true, ImGuiWindowFlags_NoScrollbar);
+                // Left Card: Colors
+                ImGui::BeginChild("Set_Colors_Card", ImVec2(colW, setCardH), true, ImGuiWindowFlags_NoScrollbar);
                 ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Colors");
                 ImGui::Separator();
                 ImGui::Spacing();
@@ -1209,8 +1233,9 @@ static void EndCard()
 
                 ImGui::SameLine(0, colGap);
 
-                ImGui::BeginChild("Set_Thickness_Card", ImVec2(colW, 160.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Outline Thickness");
+                // Right Card: Overlay & Thickness Settings
+                ImGui::BeginChild("Set_Thickness_Card", ImVec2(colW, setCardH), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Overlay Settings");
                 ImGui::Separator();
                 ImGui::Spacing();
                 static float demoBoxTh = 1.0f, demoSnapTh = 1.0f, demoSkelTh = 1.0f;
@@ -1218,36 +1243,13 @@ static void EndCard()
                 ImGui::Spacing();
                 TuningSlider("Line Thickness", &demoSnapTh, 0.5f, 3.0f, "%.1fpx");
                 ImGui::Spacing();
-                TuningSlider("Skeleton Thickness", &demoSkelTh, 0.5f, 3.0f, "%.1fpx");
-                ImGui::EndChild();
-
-                ImGui::Spacing();
-
-                // Row 2: Left = Line Origin (145pt), Right = Theme & Opacity (145pt)
-                ImGui::BeginChild("Set_Origin_Card", ImVec2(colW, 145.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Line Origin");
-                ImGui::Separator();
-                ImGui::Spacing();
                 static int snapOrigin = 2;
                 const char *origins[] = { "Top", "Middle", "Bottom" };
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo("##LineOriginDemo", &snapOrigin, origins, 3);
                 ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Origin point for screen lines:");
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Top, Center, or Screen Bottom");
-                ImGui::EndChild();
-
-                ImGui::SameLine(0, colGap);
-
-                ImGui::BeginChild("Set_Theme_Card", ImVec2(colW, 145.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Theme & Launcher");
-                ImGui::Separator();
-                ImGui::Spacing();
                 static float demoOpacity = 0.95f;
                 TuningSlider("Menu Opacity", &demoOpacity, 0.5f, 1.0f, "%.2f");
-                ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Floating Launcher: 56x56pt");
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Accent: Cyberpunk #FF8A00");
                 ImGui::EndChild();
 
                 ImGui::PopStyleVar(2);

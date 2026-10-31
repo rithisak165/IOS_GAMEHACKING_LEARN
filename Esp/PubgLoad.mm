@@ -140,6 +140,9 @@ static PubgLoad *g_SharedInstance = nil;
     return nil;
 }
 
+static const NSInteger kOXSAKOverlayTag  = 0x5A4;
+static const NSInteger kOXSAKLauncherTag = 0x5A5;
+
 + (void)load
 {
     [super load];
@@ -154,24 +157,26 @@ static PubgLoad *g_SharedInstance = nil;
 
 - (void)startOverlay
 {
-    if (!_vna) {
-        _vna = [[ImGuiDrawView alloc] init];
-    }
+    static dispatch_once_t startOverlayOnce;
+    dispatch_once(&startOverlayOnce, ^{
+        self->_vna = [ImGuiDrawView sharedInstance];
+        self->_vna.view.tag = kOXSAKOverlayTag;
 
-    _isMenuOpen = YES;
-    [ImGuiDrawView showChange:YES];
+        self->_isMenuOpen = YES;
+        [ImGuiDrawView showChange:YES];
 
-    [self setupFloatingButton];
-    [self tryAttachView];
+        [self setupFloatingButton];
+        [self tryAttachView];
 
-    // Keep checking until the overlay view is successfully attached to the hierarchy
-    self.attachTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
-                                                        target:self
-                                                      selector:@selector(tryAttachView)
-                                                      userInfo:nil
-                                                       repeats:YES];
+        // Keep checking until the overlay view is successfully attached to the hierarchy
+        self.attachTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                            target:self
+                                                          selector:@selector(tryAttachView)
+                                                          userInfo:nil
+                                                           repeats:YES];
 
-    [self setupGesture];
+        [self setupGesture];
+    });
 }
 
 - (void)setupFloatingButton
@@ -188,6 +193,7 @@ static PubgLoad *g_SharedInstance = nil;
     
     _floatingButton = [[FloatingOXSAKButton alloc] initWithFrame:CGRectMake(0, 0, 56, 56)];
     _floatingButton.center = CGPointMake(x, y);
+    _floatingButton.tag = kOXSAKLauncherTag;
     
     __weak PubgLoad *weakSelf = self;
     _floatingButton.onTap = ^{
@@ -201,15 +207,27 @@ static PubgLoad *g_SharedInstance = nil;
     if (window) {
         UIView *targetContainer = (window.rootViewController && window.rootViewController.view) ? window.rootViewController.view : window;
         
-        // Attach ImGui overlay view
+        // Remove any stale duplicate overlays if present
+        for (UIView *subview in targetContainer.subviews) {
+            if (subview.tag == kOXSAKOverlayTag && subview != _vna.view) {
+                [subview removeFromSuperview];
+            }
+            if (subview.tag == kOXSAKLauncherTag && subview != _floatingButton) {
+                [subview removeFromSuperview];
+            }
+        }
+
+        // Attach ImGui overlay view (Singleton)
         if (_vna && _vna.view.superview != targetContainer) {
             [_vna.view removeFromSuperview];
+            _vna.view.tag = kOXSAKOverlayTag;
             [targetContainer addSubview:_vna.view];
         }
         
         // Attach Floating OXSAK Button
         if (_floatingButton && _floatingButton.superview != targetContainer) {
             [_floatingButton removeFromSuperview];
+            _floatingButton.tag = kOXSAKLauncherTag;
             [targetContainer addSubview:_floatingButton];
         }
         
@@ -231,16 +249,25 @@ static PubgLoad *g_SharedInstance = nil;
 
 - (void)setupGesture
 {
+    UIWindow *win = [PubgLoad findKeyWindow];
+    if (!win) return;
+    
+    // Check if double-tap gesture already exists to prevent duplicate handlers
+    for (UIGestureRecognizer *g in win.gestureRecognizers) {
+        if ([g isKindOfClass:[UITapGestureRecognizer class]]) {
+            UITapGestureRecognizer *tg = (UITapGestureRecognizer *)g;
+            if (tg.numberOfTapsRequired == 2 && tg.numberOfTouchesRequired == 2) {
+                return; // Already attached
+            }
+        }
+    }
+
     // Double tap with 2 fingers toggles the menu open/closed
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(toggleMenu)];
     tap.numberOfTapsRequired = 2;
     tap.numberOfTouchesRequired = 2;
     tap.cancelsTouchesInView = NO;
-    
-    UIWindow *win = [PubgLoad findKeyWindow];
-    if (win) {
-        [win addGestureRecognizer:tap];
-    }
+    [win addGestureRecognizer:tap];
 }
 
 - (void)toggleMenu
