@@ -88,7 +88,7 @@ static bool s_NoRecoil       = false;
 static bool s_NoShake        = false;
 static bool s_UnlimitedAmmo  = false;
 static bool s_FastReload     = false;
-static bool s_AutoMelee      = false;
+static bool s_SpeedHack      = false;
 static bool s_CustomFOV      = false;
 
 // ── Legitimate Player Count Test Data ──
