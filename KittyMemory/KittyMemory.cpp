@@ -7,7 +7,9 @@
 //
 
 #include "KittyMemory.hpp"
-#include <substrate.h>
+#include <dlfcn.h>
+#include <mach/mach.h>
+#include <mach/vm_map.h>
 
 
 using KittyMemory::Memory_Status;
@@ -29,7 +31,7 @@ static bool cydiaExist(){
 
 typedef void (*MSHookMemory_t)(void *, const void *, size_t);
 inline bool findMSHookMemory(void *dst, const void *src, size_t len){
-  static void *ret = MSFindSymbol(NULL, "_MSHookMemory");
+  static void *ret = (void*)dlsym(RTLD_DEFAULT, "MSHookMemory");
   if(ret != NULL){
     reinterpret_cast<MSHookMemory_t>(ret)(dst, src, len);
     return true;
@@ -138,7 +140,9 @@ Memory_Status KittyMemory::memRead(void *buffer, const void *addr, size_t len) {
     if (len < 1 || len > INT_MAX)
         return INV_LEN;
 
-    if (memcpy(buffer, addr, len) != NULL)
+    vm_size_t bytes_read = 0;
+    kern_return_t kr = vm_read_overwrite(mach_task_self(), (vm_address_t)addr, len, (vm_address_t)buffer, &bytes_read);
+    if (kr == KERN_SUCCESS && bytes_read == len)
         return SUCCESS;
 
     return FAILED;
@@ -180,12 +184,14 @@ KittyMemory::memory_file_info KittyMemory::getBaseInfo(){
 
 
 KittyMemory::memory_file_info KittyMemory::getMemoryFileInfo(const char *fileName){
-    memory_file_info _info;
+    memory_file_info _info = {0, NULL, NULL, 0};
+    if (!fileName) return _info;
 
     int imageCount = _dyld_image_count();
 
     for(int i = 0; i < imageCount; i++) {
         const char *name = _dyld_get_image_name(i);
+        if(!name) continue;
         const mach_header *header = _dyld_get_image_header(i);
         if(!strstr(name, fileName)) continue;
 
@@ -194,6 +200,7 @@ KittyMemory::memory_file_info KittyMemory::getMemoryFileInfo(const char *fileNam
         };
 
         _info = new_info;
+        break;
     }
     return _info;
 }

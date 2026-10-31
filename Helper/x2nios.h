@@ -9,7 +9,7 @@
 #import "KittyMemory/writeData.hpp"
 #import "KittyMemory/MemoryPatch.hpp"
 #include <mach-o/dyld.h>
-#include <substrate.h>
+#include <dlfcn.h>
 
 
 

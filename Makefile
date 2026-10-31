@@ -4,13 +4,14 @@ DEBUG := 0
 FINALPACKAGE := 1
 FOR_RELEASE := 1
 THEOS_PACKAGE_SCHEME := rootless
+SUBSTRATE := 0
 
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = ipa
 
 # Core Frameworks (Pure standalone Apple frameworks - no CydiaSubstrate dependency required for jailed sideloading)
-ipa_FRAMEWORKS = UIKit Foundation Security QuartzCore CoreGraphics CoreText AVFoundation Accelerate GLKit SystemConfiguration GameController
+ipa_FRAMEWORKS = UIKit Foundation Security QuartzCore CoreGraphics CoreText AVFoundation Accelerate GLKit SystemConfiguration GameController Metal MetalKit
 
 # Base compilation flags
 COMMON_FLAGS = -std=c++17 -fno-rtti -fno-exceptions -DNDEBUG -fvisibility=hidden -w

@@ -80,6 +80,8 @@ jobs:
           # 2. Set install_name to @executable_path/ipa.dylib
           install_name_tool -id @executable_path/ipa.dylib "$DYLIB"
           echo "Adjusted install_name to @executable_path/ipa.dylib."
+          install_name_tool -change "@rpath/CydiaSubstrate.framework/CydiaSubstrate" "/usr/lib/libSystem.B.dylib" "$DYLIB" 2>/dev/null || true
+          install_name_tool -change "/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate" "/usr/lib/libSystem.B.dylib" "$DYLIB" 2>/dev/null || true
 
           # 3. Apply ad-hoc pseudo-signature using ldid
           ldid -S "$DYLIB"
@@ -105,13 +107,21 @@ jobs:
           dylib = sys.argv[1]
           with open(dylib, 'rb') as f:
               data = f.read()
-          sub = b'/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate'
-          if sub in data:
-              rep = b'/usr/lib/libSystem.B.dylib'.ljust(len(sub), b'\x00')
-              data = data.replace(sub, rep)
+          targets = [
+              b'@rpath/CydiaSubstrate.framework/CydiaSubstrate',
+              b'/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate',
+              b'/Library/MobileSubstrate/MobileSubstrate.dylib'
+          ]
+          modified = False
+          for sub in targets:
+              if sub in data:
+                  rep = b'/usr/lib/libSystem.B.dylib'.ljust(len(sub), b'\x00')
+                  data = data.replace(sub, rep)
+                  modified = True
+                  print(f"[SUCCESS] Stripped {sub.decode()} for jailed compatibility.")
+          if modified:
               with open(dylib, 'wb') as f:
                   f.write(data)
-              print("[SUCCESS] Stripped CydiaSubstrate dependency for jailed compatibility.")
           PY
           else
             echo "[PASS] Binary is clean and standalone - no external CydiaSubstrate requirement."

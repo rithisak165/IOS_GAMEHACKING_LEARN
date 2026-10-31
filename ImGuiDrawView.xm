@@ -588,10 +588,9 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 		static dispatch_once_t s_InitContextOnce;
 		dispatch_once(&s_InitContextOnce, ^{
 			self->_device = MTLCreateSystemDefaultDevice();
+			if (!self->_device) return;
 			self->_commandQueue = [self->_device newCommandQueue];
-
-			if (!self->_device)
-				abort();
+			if (!self->_commandQueue) return;
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -745,6 +744,7 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 
 - (void)drawInMTKView:(MTKView *)view
 {
+	if (!self.device || !self.commandQueue) return;
 	ImGuiIO &io = ImGui::GetIO();
 	io.DisplaySize.x = view.bounds.size.width;
 	io.DisplaySize.y = view.bounds.size.height;
