@@ -434,8 +434,9 @@ void DrawUniversalESP() {
         }
 
         // 6. Draw Player Health Bar (Left of Bounding Box)
+        // Only render when actual valid health data is available (never fabricate health)
         if (g_ESP.bHealth) {
-            int currentHealth = 100;
+            int currentHealth = -1;
             if (IsValidPtr(entity)) {
                 // In Polyfield: NpcControl health is at 0x78; PlayerControl health is at 0x80
                 int h1 = *(int*)((uintptr_t)entity + 0x78);
@@ -443,33 +444,36 @@ void DrawUniversalESP() {
                 if (h1 >= 0 && h1 <= 100) currentHealth = h1;
                 else if (h2 >= 0 && h2 <= 100) currentHealth = h2;
             }
-            float healthFrac = fmaxf(0.0f, fminf(1.0f, (float)currentHealth / 100.0f));
 
-            float barW = 3.0f;
-            float barMargin = 3.5f;
-            ImVec2 barBgMin(boxMin.x - barMargin - barW, boxMin.y);
-            ImVec2 barBgMax(boxMin.x - barMargin, boxMax.y);
+            if (currentHealth >= 0) {
+                float healthFrac = fmaxf(0.0f, fminf(1.0f, (float)currentHealth / 100.0f));
 
-            // Dark border & background track
-            drawList->AddRectFilled(barBgMin, barBgMax, IM_COL32(16, 16, 20, 220), 1.0f);
-            drawList->AddRect(barBgMin, barBgMax, IM_COL32(0, 0, 0, 200), 1.0f, 0, 1.0f);
+                float barW = 3.0f;
+                float barMargin = 3.5f;
+                ImVec2 barBgMin(boxMin.x - barMargin - barW, boxMin.y);
+                ImVec2 barBgMax(boxMin.x - barMargin, boxMax.y);
 
-            // Health Fill (bottom to top)
-            float fillHeight = height * healthFrac;
-            if (fillHeight > 0.5f) {
-                ImVec2 barFillMin(barBgMin.x + 0.5f, barBgMax.y - fillHeight);
-                ImVec2 barFillMax(barBgMax.x - 0.5f, barBgMax.y);
+                // Dark border & background track
+                drawList->AddRectFilled(barBgMin, barBgMax, IM_COL32(16, 16, 20, 220), 1.0f);
+                drawList->AddRect(barBgMin, barBgMax, IM_COL32(0, 0, 0, 200), 1.0f, 0, 1.0f);
 
-                // Color grading: Green (>50%) -> Amber/Orange (25-50%) -> Red (<25%)
-                ImU32 healthCol;
-                if (healthFrac > 0.50f) {
-                    healthCol = IM_COL32(76, 217, 100, 240); // Vibrant Green
-                } else if (healthFrac > 0.25f) {
-                    healthCol = IM_COL32(255, 149, 0, 240); // Amber Orange
-                } else {
-                    healthCol = IM_COL32(255, 59, 48, 240);  // Critical Red
+                // Health Fill (bottom to top)
+                float fillHeight = height * healthFrac;
+                if (fillHeight > 0.5f) {
+                    ImVec2 barFillMin(barBgMin.x + 0.5f, barBgMax.y - fillHeight);
+                    ImVec2 barFillMax(barBgMax.x - 0.5f, barBgMax.y);
+
+                    // Color grading: Green (>50%) -> Amber/Orange (25-50%) -> Red (<25%)
+                    ImU32 healthCol;
+                    if (healthFrac > 0.50f) {
+                        healthCol = IM_COL32(76, 217, 100, 240); // Vibrant Green
+                    } else if (healthFrac > 0.25f) {
+                        healthCol = IM_COL32(255, 149, 0, 240); // Amber Orange
+                    } else {
+                        healthCol = IM_COL32(255, 59, 48, 240);  // Critical Red
+                    }
+                    drawList->AddRectFilled(barFillMin, barFillMax, healthCol, 1.0f);
                 }
-                drawList->AddRectFilled(barFillMin, barFillMax, healthCol, 1.0f);
             }
         }
 

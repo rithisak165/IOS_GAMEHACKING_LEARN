@@ -278,6 +278,34 @@ static bool CloseButton(const char* label, float width = -1.0f, float height = 3
 // =========================================================================
 // Modern Card Helper Functions (Matching Reference Screenshot)
 // =========================================================================
+static void BeginMasterCard(const char* id, const char* title, NavIcon icon, float width, float height, bool isActive)
+{
+	ImVec4 bgCol = isActive ? ImVec4(0.125f, 0.115f, 0.180f, 0.98f) : ImVec4(0.095f, 0.095f, 0.130f, 0.92f);
+	ImVec4 borderCol = isActive ? ImVec4(1.0f, 0.54f, 0.0f, 0.75f) : ImVec4(0.20f, 0.20f, 0.28f, 0.60f);
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, bgCol);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderCol);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+	ImGui::BeginChild(id, ImVec2(width, height), true, ImGuiWindowFlags_NoScrollbar);
+
+	// Header: 22x22 pt rounded icon badge + Title text
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	ImVec2 p = ImGui::GetCursorScreenPos();
+	ImVec2 badgeMin(p.x, p.y + 1.0f);
+	ImVec2 badgeMax(p.x + 24.0f, p.y + 25.0f);
+	ImU32 badgeBg = isActive ? IM_COL32(56, 32, 78, 255) : IM_COL32(36, 36, 48, 220);
+	ImU32 iconCol = isActive ? IM_COL32(255, 138, 0, 255) : IM_COL32(140, 140, 160, 220);
+	drawList->AddRectFilled(badgeMin, badgeMax, badgeBg, 6.0f);
+	if (isActive) {
+		drawList->AddRect(badgeMin, badgeMax, IM_COL32(255, 179, 71, 200), 6.0f, 0, 1.0f);
+	}
+	DrawNavIcon(icon, ImVec2(badgeMin.x + 12.0f, badgeMin.y + 12.0f), iconCol);
+
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 32.0f);
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%s", title);
+}
+
 static void BeginCard(const char* id, const char* title, NavIcon icon, float width, float height)
 {
 	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f)); // #1C1C28 Card
@@ -665,11 +693,13 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 		ImGui_ImplMetal_NewFrame(renderPassDescriptor);
 		ImGui::NewFrame();
 
-		// Responsive layout sizing
+		// Responsive layout sizing with iPhone notch & safe-area margins
 		float screenW = io.DisplaySize.x;
 		float screenH = io.DisplaySize.y;
-		float winW = fminf(690.0f, screenW - 20.0f);
-		float winH = fminf(385.0f, screenH - 20.0f);
+		float safeMarginX = (screenW > 600.0f) ? 20.0f : 12.0f;
+		float safeMarginY = 16.0f;
+		float winW = fminf(710.0f, screenW - (safeMarginX * 2.0f));
+		float winH = fminf(405.0f, screenH - (safeMarginY * 2.0f));
 		float posX = (screenW - winW) * 0.5f;
 		float posY = (screenH - winH) * 0.5f;
 
@@ -703,7 +733,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 			// LEFT VERTICAL SIDEBAR (#15151B)
 			// Navigation: ESP (Eye) | AIM (Crosshair) | MISC (Sliders) | SETTING (Gear)
 			// =================================================================
-			float sidebarW = 140.0f;
+			float sidebarW = (screenW < 520.0f) ? 120.0f : 140.0f;
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f));
 			ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0), true, ImGuiWindowFlags_NoScrollbar);
 			{
@@ -711,7 +741,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				
 				// Render the authentic graphic OXSAK emblem badge at the top
 				if (s_LogoTexture) {
-					float logoSize = 64.0f;
+					float logoSize = 52.0f;
 					float logoX = (sidebarW - logoSize) * 0.5f - 6.0f;
 					if (logoX < 4.0f) logoX = 4.0f;
 					ImGui::SetCursorPosX(logoX);
@@ -743,10 +773,14 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				}
 				ImGui::Spacing();
 
-				// Dedicated Red Close Button safely docked at the bottom (never clipped)
+				// Push Close Button to Bottom with generous vertical separation from SETTING
 				float closeBtnH = 36.0f;
-				float bottomMargin = 12.0f;
-				ImGui::SetCursorPosY(ImGui::GetWindowHeight() - closeBtnH - bottomMargin);
+				float bottomMargin = 14.0f;
+				float targetY = ImGui::GetWindowHeight() - closeBtnH - bottomMargin;
+				float minY = ImGui::GetCursorPosY() + 32.0f;
+				if (targetY < minY) targetY = minY;
+
+				ImGui::SetCursorPosY(targetY);
 
 				if (CloseButton("Close", -1.0f, closeBtnH)) {
 					MenDeal = false;
@@ -769,92 +803,131 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				float colW = (contentW - colGap) * 0.5f;
 
 				// =============================================================
-				// TAB 0: ESP (Modern Card Grid Matching Reference Screenshot)
+				// TAB 0: ESP (Master Enable Switch + 5 Individual Feature Cards)
 				// =============================================================
 				if (s_SelectedTab == 0)
 				{
-					// ── Row 1: Left = Box Card (182pt), Right = Snapline (86pt) + Health Bar (86pt) ──
-					BeginCard("ESP_Box_Card", "Box", NAV_ICON_ESP, colW, 182.0f);
+					// ── Master Switch: Enable ESP (Prominent Full-Width Card at the Top) ──
+					BeginMasterCard("ESP_Master_Card", "Enable ESP", NAV_ICON_ESP, contentW, 58.0f, g_ESP.bEnable);
 					{
-						CardToggle("Enable", &g_ESP.bBox, "box");
-						if (g_ESP.bBox) {
-							ImGui::Spacing();
-							const char* boxStyles[] = { "Square", "Corner" };
-							ImGui::SetNextItemWidth(-1.0f);
-							if (ImGui::Combo("##BoxStyle", &s_BoxStyle, boxStyles, 2)) {
-								g_ESP.bCornerBox = (s_BoxStyle == 1);
-							}
-							ImGui::Spacing();
-							ImGui::TextUnformatted("Head Offset");
-							ImGui::SetNextItemWidth(-1.0f);
-							ImGui::SliderFloat("##HeadOffset", &g_ESP.topPosFloat, 0.5f, 3.5f, "%.2f m");
-							ImGui::Spacing();
-							ImGui::TextUnformatted("Box Width");
-							ImGui::SetNextItemWidth(-1.0f);
-							ImGui::SliderFloat("##BoxWidth", &g_ESP.widthScale, 0.2f, 1.5f, "%.2f");
+						// Right-aligned master toggle
+						float switchW = 42.0f;
+						float rightX = ImGui::GetWindowContentRegionMax().x - switchW;
+						if (rightX > ImGui::GetCursorPosX()) {
+							ImGui::SameLine(rightX);
+						} else {
+							ImGui::SameLine();
+						}
+
+						std::string mBtnId = "##master_esp_toggle";
+						if (ImGui::InvisibleButton(mBtnId.c_str(), ImVec2(switchW, 22.0f))) {
+							g_ESP.bEnable = !g_ESP.bEnable;
+						}
+						ImVec2 mMin = ImGui::GetItemRectMin();
+						ImVec2 mMax = ImGui::GetItemRectMax();
+						ImDrawList* dList = ImGui::GetWindowDrawList();
+						ImU32 mBg = g_ESP.bEnable ? IM_COL32(255, 138, 0, 245) : IM_COL32(46, 46, 60, 240);
+						dList->AddRectFilled(mMin, mMax, mBg, 11.0f);
+						if (g_ESP.bEnable) {
+							dList->AddRect(mMin, mMax, IM_COL32(255, 179, 71, 200), 11.0f, 0, 1.2f);
+						} else {
+							dList->AddRect(mMin, mMax, IM_COL32(65, 65, 80, 180), 11.0f, 0, 1.0f);
+						}
+						float mt = g_ESP.bEnable ? 1.0f : 0.0f;
+						float mKnobX = mMin.x + 11.0f + mt * (switchW - 22.0f);
+						dList->AddCircleFilled(ImVec2(mKnobX, mMin.y + 11.0f), 8.5f, IM_COL32(255, 255, 255, 255));
+
+						// Status text under title
+						ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 32.0f);
+						if (g_ESP.bEnable) {
+							ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Master ESP: ACTIVE (All visual layers enabled)");
+						} else {
+							ImGui::TextColored(ImVec4(0.58f, 0.58f, 0.66f, 0.85f), "Master ESP: DISABLED (Options locked until enabled)");
 						}
 					}
 					EndCard();
 
-					ImGui::SameLine(0, colGap);
+					ImGui::Spacing();
 
-					ImGui::BeginGroup();
+					// ── Individual Options Visually Disabled When Master Switch is OFF ──
+					bool espMasterOn = g_ESP.bEnable;
+					if (!espMasterOn) {
+						ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.38f); // Clear dimmed visual state
+					}
+					ImGui::BeginDisabled(!espMasterOn);
 					{
-						BeginCard("ESP_Snapline_Card", "Snapline", NAV_ICON_AIM, colW, 86.0f);
+						// ── Row 1: Left = Box Card (200pt), Right = Line (94pt) + Health Bar (94pt) ──
+						BeginCard("ESP_Box_Card", "Box", NAV_ICON_ESP, colW, 200.0f);
 						{
-							CardToggle("Enable", &g_ESP.bLine, "snap");
-							ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Directional target tracer");
+							CardToggle("Enable", &g_ESP.bBox, "box");
+							if (g_ESP.bBox) {
+								ImGui::Spacing();
+								const char* boxStyles[] = { "Square", "Corner" };
+								ImGui::SetNextItemWidth(-1.0f);
+								if (ImGui::Combo("##BoxStyle", &s_BoxStyle, boxStyles, 2)) {
+									g_ESP.bCornerBox = (s_BoxStyle == 1);
+								}
+								ImGui::Spacing();
+								ImGui::TextUnformatted("Head Offset");
+								ImGui::SetNextItemWidth(-1.0f);
+								ImGui::SliderFloat("##HeadOffset", &g_ESP.topPosFloat, 0.5f, 3.5f, "%.2f m");
+								ImGui::Spacing();
+								ImGui::TextUnformatted("Box Width");
+								ImGui::SetNextItemWidth(-1.0f);
+								ImGui::SliderFloat("##BoxWidth", &g_ESP.widthScale, 0.2f, 1.5f, "%.2f");
+							}
 						}
 						EndCard();
+
+						ImGui::SameLine(0, colGap);
+
+						ImGui::BeginGroup();
+						{
+							BeginCard("ESP_Line_Card", "Line", NAV_ICON_AIM, colW, 94.0f);
+							{
+								CardToggle("Enable", &g_ESP.bLine, "line");
+								ImGui::Spacing();
+								ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Target tracer from screen origin");
+							}
+							EndCard();
+
+							ImGui::Spacing();
+
+							BeginCard("ESP_Health_Card", "Health Bar", NAV_ICON_SETTING, colW, 94.0f);
+							{
+								CardToggle("Enable", &g_ESP.bHealth, "hp");
+								ImGui::Spacing();
+								ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic vertical health indicator");
+							}
+							EndCard();
+						}
+						ImGui::EndGroup();
 
 						ImGui::Spacing();
 
-						BeginCard("ESP_Health_Card", "Health Bar", NAV_ICON_SETTING, colW, 86.0f);
+						// ── Row 2: Left = Skeleton Card (96pt), Right = Distance Card (96pt) ──
+						BeginCard("ESP_Skeleton_Card", "Skeleton", NAV_ICON_AIM, colW, 96.0f);
 						{
-							CardToggle("Enable", &g_ESP.bHealth, "hp");
-							ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic green-amber-red fill");
+							CardToggle("Enable", &g_ESP.bSkeleton, "skel");
+							ImGui::Spacing();
+							ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "15 Articulated bones & stride");
+						}
+						EndCard();
+
+						ImGui::SameLine(0, colGap);
+
+						BeginCard("ESP_Distance_Card", "Distance", NAV_ICON_MISC, colW, 96.0f);
+						{
+							CardToggle("Enable", &g_ESP.bDistance, "dist");
+							ImGui::Spacing();
+							ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Real-time range tags in meters");
 						}
 						EndCard();
 					}
-					ImGui::EndGroup();
-
-					ImGui::Spacing();
-
-					// ── Row 2: Left = Skeleton Card (94pt), Right = Distance Card (94pt) ──
-					BeginCard("ESP_Skeleton_Card", "Skeleton", NAV_ICON_AIM, colW, 94.0f);
-					{
-						CardToggle("Enable", &g_ESP.bSkeleton, "skel");
-						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Articulated kinematics & stride");
+					ImGui::EndDisabled();
+					if (!espMasterOn) {
+						ImGui::PopStyleVar();
 					}
-					EndCard();
-
-					ImGui::SameLine(0, colGap);
-
-					BeginCard("ESP_Distance_Card", "Distance", NAV_ICON_MISC, colW, 94.0f);
-					{
-						CardToggle("Enable", &g_ESP.bDistance, "dist");
-						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Real-time range tags in meters");
-					}
-					EndCard();
-
-					ImGui::Spacing();
-
-					// ── Row 3: Left = Target Tag (94pt), Right = Master ESP (94pt) ──
-					BeginCard("ESP_Target_Card", "Target Tag", NAV_ICON_ESP, colW, 94.0f);
-					{
-						CardToggle("Enable", &g_ESP.bDrawSelf, "self");
-						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Include local player diagnostic");
-					}
-					EndCard();
-
-					ImGui::SameLine(0, colGap);
-
-					BeginCard("ESP_Master_Card", "Master ESP", NAV_ICON_SETTING, colW, 94.0f);
-					{
-						CardToggle("Enable", &g_ESP.bEnable, "master");
-						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Master switch for all visual overlays");
-					}
-					EndCard();
 				}
 				// =============================================================
 				// TAB 1: AIM (Aimbot & Silent Aim Card Grid)
@@ -994,7 +1067,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 					{
 						ImGui::ColorEdit4("Box Color##col", (float*)&g_ESP.boxColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 						ImGui::Spacing();
-						ImGui::ColorEdit4("Snapline Color##col", (float*)&g_ESP.lineColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+						ImGui::ColorEdit4("Line Color##col", (float*)&g_ESP.lineColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 						ImGui::Spacing();
 						ImGui::ColorEdit4("Skeleton Color##col", (float*)&g_ESP.skeletonColor, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 					}
@@ -1008,7 +1081,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 						ImGui::SetNextItemWidth(-1.0f);
 						ImGui::SliderFloat("##BoxTh", &g_ESP.boxThickness, 0.5f, 3.0f, "%.1f px");
 						ImGui::Spacing();
-						ImGui::TextUnformatted("Snapline Thickness");
+						ImGui::TextUnformatted("Line Thickness");
 						ImGui::SetNextItemWidth(-1.0f);
 						ImGui::SliderFloat("##LineTh", &g_ESP.lineThickness, 0.5f, 3.0f, "%.1f px");
 						ImGui::Spacing();
@@ -1020,14 +1093,14 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 					ImGui::Spacing();
 
-					// ── Row 2: Left = Snapline Origin (145pt), Right = Theme & Opacity (145pt) ──
-					BeginCard("Set_Origin_Card", "Snapline Origin", NAV_ICON_SETTING, colW, 145.0f);
+					// ── Row 2: Left = Line Origin (145pt), Right = Theme & Opacity (145pt) ──
+					BeginCard("Set_Origin_Card", "Line Origin", NAV_ICON_SETTING, colW, 145.0f);
 					{
 						const char* origins[] = { "Top", "Middle", "Bottom" };
 						ImGui::SetNextItemWidth(-1.0f);
-						ImGui::Combo("##SnapOrigin", &g_ESP.lineOrigin, origins, 3);
+						ImGui::Combo("##LineOrigin", &g_ESP.lineOrigin, origins, 3);
 						ImGui::Spacing();
-						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Origin point for screen snaplines:");
+						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Origin point for screen tracer lines:");
 						ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Top: (Screen Top), Mid: (Crosshair), Bot: (Screen Bottom)");
 					}
 					EndCard();
@@ -1051,7 +1124,6 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 
 			ImGui::End();
 		}
-
 		// Draw Crosshair on screen if enabled
 		if (s_ShowCrosshair) {
 			ImDrawList* drawList = ImGui::GetBackgroundDrawList();

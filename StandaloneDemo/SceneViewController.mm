@@ -852,13 +852,11 @@ static void EndCard()
     CGFloat screenW = self.view.bounds.size.width;
     CGFloat screenH = self.view.bounds.size.height;
 
-    // Responsive scaling matching reference proportions
-    CGFloat menuW = fminf(690.0f, screenW - 20.0f);
-    CGFloat menuH = fminf(385.0f, screenH - 20.0f);
-    if (screenW < 520.0f) {
-        menuW = screenW - 16.0f;
-        menuH = screenH - 36.0f;
-    }
+    // Responsive scaling with iPhone notch & safe-area margins
+    CGFloat safeMarginX = (screenW > 600.0f) ? 20.0f : 12.0f;
+    CGFloat safeMarginY = 16.0f;
+    CGFloat menuW = fminf(710.0f, screenW - (safeMarginX * 2.0f));
+    CGFloat menuH = fminf(405.0f, screenH - (safeMarginY * 2.0f));
 
     ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
     ImGui::SetNextWindowPos(ImVec2((screenW - menuW) / 2.0f, (screenH - menuH) / 2.0f), ImGuiCond_Always);
@@ -899,7 +897,7 @@ static void EndCard()
 
             char tabLabel[64];
             snprintf(tabLabel, sizeof(tabLabel), "%s  %s", icons[i], tabs[i]);
-            if (ImGui::Button(tabLabel, ImVec2(-1.0f, 38.0f))) {
+            if (ImGui::Button(tabLabel, ImVec2(-1.0f, 36.0f))) {
                 g_State.currentTab = i;
             }
 
@@ -907,10 +905,14 @@ static void EndCard()
             ImGui::Spacing();
         }
 
-        // Dedicated Bottom Red Close Button (Docked, never clipped)
+        // Dedicated Bottom Red Close Button (Docked with generous vertical distance from SETTING)
         float closeBtnH = 36.0f;
-        float bottomMargin = 12.0f;
-        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - closeBtnH - bottomMargin);
+        float bottomMargin = 14.0f;
+        float targetY = ImGui::GetWindowHeight() - closeBtnH - bottomMargin;
+        float minY = ImGui::GetCursorPosY() + 32.0f;
+        if (targetY < minY) targetY = minY;
+
+        ImGui::SetCursorPosY(targetY);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.07f, 0.09f, 0.95f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.88f, 0.18f, 0.22f, 0.85f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.41f, 0.41f, 1.0f));
@@ -934,100 +936,115 @@ static void EndCard()
             float colW = (contentW - colGap) * 0.5f;
 
             // ---------------------------------------------------------------------------------
-            // TAB 0: ESP (Modern Card Grid Matching Reference Screenshot)
+            // TAB 0: ESP (Master Enable Switch + 5 Individual Feature Cards)
             // ---------------------------------------------------------------------------------
             if (g_State.currentTab == 0) {
-                // Row 1: Left = Box (182pt), Right = Snapline (86pt) + Health Bar (86pt)
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
+                // Prominent Full-Width Master Switch Card at the Very Top
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, g_State.bEnableESP ? ImVec4(0.125f, 0.115f, 0.180f, 0.98f) : ImVec4(0.095f, 0.095f, 0.130f, 0.92f));
+                ImGui::PushStyleColor(ImGuiCol_Border, g_State.bEnableESP ? ImVec4(1.0f, 0.54f, 0.0f, 0.75f) : ImVec4(0.20f, 0.20f, 0.28f, 0.60f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
-                
-                ImGui::BeginChild("Demo_Box_Card", ImVec2(colW, 182.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#]  Box");
-                ImGui::Separator();
-                ImGui::Spacing();
-                ToggleSwitch("Enable", &g_State.bBox);
-                if (g_State.bBox) {
-                    ImGui::Spacing();
-                    static int boxStyle = 0;
-                    const char *styles[] = { "Square", "Corner" };
-                    ImGui::SetNextItemWidth(-1.0f);
-                    ImGui::Combo("##DemoBoxStyle", &boxStyle, styles, 2);
-                    ImGui::Spacing();
-                    TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
-                    ImGui::Spacing();
-                    TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+
+                ImGui::BeginChild("Demo_Master_Card", ImVec2(contentW, 58.0f), true, ImGuiWindowFlags_NoScrollbar);
+                ToggleSwitch("Enable ESP", &g_State.bEnableESP);
+                if (g_State.bEnableESP) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Master ESP: ACTIVE (All visual layers enabled)");
+                } else {
+                    ImGui::TextColored(ImVec4(0.58f, 0.58f, 0.66f, 0.85f), "Master ESP: DISABLED (Options locked until enabled)");
                 }
-                ImGui::EndChild();
-
-                ImGui::SameLine(0, colGap);
-
-                ImGui::BeginGroup();
-                {
-                    ImGui::BeginChild("Demo_Snap_Card", ImVec2(colW, 86.0f), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Snapline");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bSnaplines);
-                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Directional target tracer");
-                    ImGui::EndChild();
-
-                    ImGui::Spacing();
-
-                    ImGui::BeginChild("Demo_Health_Card", ImVec2(colW, 86.0f), true, ImGuiWindowFlags_NoScrollbar);
-                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Health Bar");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    ToggleSwitch("Enable", &g_State.bHealth);
-                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic green-amber-red fill");
-                    ImGui::EndChild();
-                }
-                ImGui::EndGroup();
-
-                ImGui::Spacing();
-
-                // Row 2: Left = Skeleton (94pt), Right = Distance (94pt)
-                ImGui::BeginChild("Demo_Skel_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Skeleton");
-                ImGui::Separator();
-                ImGui::Spacing();
-                ToggleSwitch("Enable", &g_State.bSkeleton);
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Articulated kinematics & stride");
-                ImGui::EndChild();
-
-                ImGui::SameLine(0, colGap);
-
-                ImGui::BeginChild("Demo_Dist_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Distance");
-                ImGui::Separator();
-                ImGui::Spacing();
-                ToggleSwitch("Enable", &g_State.bDistance);
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Real-time range tags in meters");
-                ImGui::EndChild();
-
-                ImGui::Spacing();
-
-                // Row 3: Left = Targets (94pt), Right = Master ESP (94pt)
-                ImGui::BeginChild("Demo_Target_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#]  Active Targets");
-                ImGui::Separator();
-                ImGui::Spacing();
-                ImGui::Text("Simulated: %zu Dummies", _dummies.size());
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Live 3D entities in scene");
-                ImGui::EndChild();
-
-                ImGui::SameLine(0, colGap);
-
-                ImGui::BeginChild("Demo_Master_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Master ESP");
-                ImGui::Separator();
-                ImGui::Spacing();
-                ToggleSwitch("Enable", &g_State.bEnableESP);
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Master switch for all visual overlays");
                 ImGui::EndChild();
 
                 ImGui::PopStyleVar(2);
-                ImGui::PopStyleColor();
+                ImGui::PopStyleColor(2);
+
+                ImGui::Spacing();
+
+                // Individual options visibly dimmed and disabled when master switch is OFF
+                bool espMasterOn = g_State.bEnableESP;
+                if (!espMasterOn) {
+                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.38f);
+                }
+                ImGui::BeginDisabled(!espMasterOn);
+                {
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
+                    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+                    
+                    // Row 1: Left = Box (200pt), Right = Line (94pt) + Health Bar (94pt)
+                    ImGui::BeginChild("Demo_Box_Card", ImVec2(colW, 200.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#]  Box");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ToggleSwitch("Enable", &g_State.bBox);
+                    if (g_State.bBox) {
+                        ImGui::Spacing();
+                        static int boxStyle = 0;
+                        const char *styles[] = { "Square", "Corner" };
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::Combo("##DemoBoxStyle", &boxStyle, styles, 2);
+                        ImGui::Spacing();
+                        TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
+                        ImGui::Spacing();
+                        TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
+                    }
+                    ImGui::EndChild();
+
+                    ImGui::SameLine(0, colGap);
+
+                    ImGui::BeginGroup();
+                    {
+                        ImGui::BeginChild("Demo_Line_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
+                        ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Line");
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                        ToggleSwitch("Enable", &g_State.bSnaplines);
+                        ImGui::Spacing();
+                        ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Target tracer from screen origin");
+                        ImGui::EndChild();
+
+                        ImGui::Spacing();
+
+                        ImGui::BeginChild("Demo_Health_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
+                        ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Health Bar");
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                        ToggleSwitch("Enable", &g_State.bHealth);
+                        ImGui::Spacing();
+                        ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic vertical health indicator");
+                        ImGui::EndChild();
+                    }
+                    ImGui::EndGroup();
+
+                    ImGui::Spacing();
+
+                    // Row 2: Left = Skeleton (96pt), Right = Distance (96pt)
+                    ImGui::BeginChild("Demo_Skel_Card", ImVec2(colW, 96.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Skeleton");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ToggleSwitch("Enable", &g_State.bSkeleton);
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "15 Articulated bones & stride");
+                    ImGui::EndChild();
+
+                    ImGui::SameLine(0, colGap);
+
+                    ImGui::BeginChild("Demo_Dist_Card", ImVec2(colW, 96.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Distance");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ToggleSwitch("Enable", &g_State.bDistance);
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Real-time range tags in meters");
+                    ImGui::EndChild();
+
+                    ImGui::PopStyleVar(2);
+                    ImGui::PopStyleColor();
+                }
+                ImGui::EndDisabled();
+                if (!espMasterOn) {
+                    ImGui::PopStyleVar();
+                }
             }
 
             // ---------------------------------------------------------------------------------
@@ -1036,7 +1053,7 @@ static void EndCard()
             else if (g_State.currentTab == 1) {
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
                 // Row 1: Left = Aimbot (185pt), Right = Aimbot Tuning (185pt)
                 ImGui::BeginChild("Aim_Main_Card", ImVec2(colW, 185.0f), true, ImGuiWindowFlags_NoScrollbar);
@@ -1098,7 +1115,7 @@ static void EndCard()
             else if (g_State.currentTab == 2) {
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
                 // Row 1: Left = Telemetry (180pt), Right = Engine Metrics (180pt)
                 ImGui::BeginChild("Misc_Telemetry_Card", ImVec2(colW, 180.0f), true, ImGuiWindowFlags_NoScrollbar);
@@ -1134,7 +1151,7 @@ static void EndCard()
             else if (g_State.currentTab == 3) {
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.110f, 0.110f, 0.155f, 0.95f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
 
                 // Row 1: Left = ESP Colors (160pt), Right = Outline Thickness (160pt)
                 ImGui::BeginChild("Set_Colors_Card", ImVec2(colW, 160.0f), true, ImGuiWindowFlags_NoScrollbar);
@@ -1143,7 +1160,7 @@ static void EndCard()
                 ImGui::Spacing();
                 ImGui::ColorEdit4("Box##democol", (float*)&g_State.colBox, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
                 ImGui::Spacing();
-                ImGui::ColorEdit4("Snapline##democol", (float*)&g_State.colSnapline, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+                ImGui::ColorEdit4("Line##democol", (float*)&g_State.colSnapline, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
                 ImGui::Spacing();
                 ImGui::ColorEdit4("Skeleton##democol", (float*)&g_State.colSkeleton, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
                 ImGui::EndChild();
@@ -1157,24 +1174,24 @@ static void EndCard()
                 static float demoBoxTh = 1.0f, demoSnapTh = 1.0f, demoSkelTh = 1.0f;
                 TuningSlider("Box Thickness", &demoBoxTh, 0.5f, 3.0f, "%.1fpx");
                 ImGui::Spacing();
-                TuningSlider("Snapline Thickness", &demoSnapTh, 0.5f, 3.0f, "%.1fpx");
+                TuningSlider("Line Thickness", &demoSnapTh, 0.5f, 3.0f, "%.1fpx");
                 ImGui::Spacing();
                 TuningSlider("Skeleton Thickness", &demoSkelTh, 0.5f, 3.0f, "%.1fpx");
                 ImGui::EndChild();
 
                 ImGui::Spacing();
 
-                // Row 2: Left = Snapline Origin (145pt), Right = Theme & Opacity (145pt)
+                // Row 2: Left = Line Origin (145pt), Right = Theme & Opacity (145pt)
                 ImGui::BeginChild("Set_Origin_Card", ImVec2(colW, 145.0f), true, ImGuiWindowFlags_NoScrollbar);
-                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Snapline Origin");
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Line Origin");
                 ImGui::Separator();
                 ImGui::Spacing();
                 static int snapOrigin = 2;
                 const char *origins[] = { "Top", "Middle", "Bottom" };
                 ImGui::SetNextItemWidth(-1.0f);
-                ImGui::Combo("##SnapOriginDemo", &snapOrigin, origins, 3);
+                ImGui::Combo("##LineOriginDemo", &snapOrigin, origins, 3);
                 ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Origin point for screen snaplines:");
+                ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Origin point for screen lines:");
                 ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Top, Center, or Screen Bottom");
                 ImGui::EndChild();
 
