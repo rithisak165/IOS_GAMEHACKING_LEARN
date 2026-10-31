@@ -209,11 +209,11 @@ static bool NavButton(const char* label, NavIcon icon, bool isSelected, float wi
 	ImU32 icon_col;
 
 	if (isSelected) {
-		bg_col = IM_COL32(40, 32, 54, 245);       // Deep charcoal pill background (#282036)
+		bg_col = IM_COL32(32, 32, 43, 245);       // Dark charcoal background (#20202B)
 		text_col = IM_COL32(255, 255, 255, 255); // Pure white text
 		icon_col = IM_COL32(255, 138, 0, 255);   // Vibrant OXSAK Orange icon (#FF8A00)
 	} else if (hovered || held) {
-		bg_col = IM_COL32(32, 30, 44, 200);
+		bg_col = IM_COL32(28, 28, 36, 200);
 		text_col = IM_COL32(240, 240, 245, 255);
 		icon_col = IM_COL32(255, 179, 71, 230);  // Amber highlight
 	} else {
@@ -303,7 +303,7 @@ static void BeginMasterCard(const char* id, const char* title, NavIcon icon, flo
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 badgeMin(p.x, p.y + 1.0f);
 	ImVec2 badgeMax(p.x + 22.0f, p.y + 23.0f);
-	ImU32 badgeBg = isActive ? IM_COL32(56, 32, 78, 255) : IM_COL32(36, 36, 48, 220);
+	ImU32 badgeBg = isActive ? IM_COL32(44, 32, 18, 240) : IM_COL32(36, 36, 48, 220);
 	ImU32 iconCol = isActive ? IM_COL32(255, 138, 0, 255) : IM_COL32(140, 140, 160, 220);
 	drawList->AddRectFilled(badgeMin, badgeMax, badgeBg, 5.0f);
 	if (isActive) {
@@ -329,7 +329,7 @@ static void BeginCard(const char* id, const char* title, NavIcon icon, float wid
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 badgeMin(p.x, p.y + 1.0f);
 	ImVec2 badgeMax(p.x + 22.0f, p.y + 23.0f);
-	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(44, 28, 62, 240), 5.0f);
+	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(44, 32, 18, 240), 5.0f);
 	DrawNavIcon(icon, ImVec2(badgeMin.x + 11.0f, badgeMin.y + 11.0f), IM_COL32(255, 138, 0, 255));
 
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 30.0f);
@@ -359,12 +359,12 @@ static bool MiscToggleCard(const char* id, const char* title, NavIcon icon, floa
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
 	ImGui::BeginChild(id, ImVec2(width, height), true, ImGuiWindowFlags_NoScrollbar);
 
-	// Header: 22x22 pt rounded purple icon badge + Title text
+	// Header: 22x22 pt rounded amber-charcoal icon badge + Title text
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 badgeMin(p.x, p.y + 1.0f);
 	ImVec2 badgeMax(p.x + 22.0f, p.y + 23.0f);
-	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(44, 28, 62, 240), 5.0f);
+	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(44, 32, 18, 240), 5.0f);
 	DrawNavIcon(icon, ImVec2(badgeMin.x + 11.0f, badgeMin.y + 11.0f), IM_COL32(255, 138, 0, 255));
 
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 30.0f);
@@ -627,7 +627,7 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 
 	ImVec4 *colors = style.Colors;
 	colors[ImGuiCol_WindowBg]           = ImVec4(0.063f, 0.063f, 0.078f, 0.96f);  // #101014 Obsidian Charcoal
-	colors[ImGuiCol_ChildBg]            = ImVec4(0.110f, 0.110f, 0.155f, 0.95f);  // #1C1C28 Cards
+	colors[ImGuiCol_ChildBg]            = ImVec4(0.125f, 0.125f, 0.168f, 0.95f);  // #20202B Dark Charcoal Cards
 	colors[ImGuiCol_PopupBg]            = ImVec4(0.082f, 0.082f, 0.106f, 0.98f);  // #15151B Sidebar
 	colors[ImGuiCol_Border]             = ImVec4(1.0f, 0.54f, 0.0f, 0.45f);       // #FF8A00 Glowing Orange Border
 	colors[ImGuiCol_BorderShadow]       = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -984,7 +984,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 					ImDrawList* dList = ImGui::GetWindowDrawList();
 					ImVec2 cp = ImGui::GetCursorScreenPos();
 
-					dList->AddRectFilled(ImVec2(cp.x, cp.y + 1.0f), ImVec2(cp.x + 20.0f, cp.y + 21.0f), IM_COL32(56, 32, 78, 255), 4.0f);
+					dList->AddRectFilled(ImVec2(cp.x, cp.y + 1.0f), ImVec2(cp.x + 20.0f, cp.y + 21.0f), IM_COL32(44, 32, 18, 240), 4.0f);
 					DrawNavIcon(NAV_ICON_ESP, ImVec2(cp.x + 10.0f, cp.y + 11.0f), IM_COL32(255, 138, 0, 255));
 
 					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 26.0f);
@@ -1029,7 +1029,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 					for (int st = 0; st < 4; st++) {
 						bool isSubActive = (s_EspSubTab == st);
 						if (isSubActive) {
-							ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.16f, 0.36f, 0.95f)); // Active purple pill
+							ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.15f, 0.08f, 0.95f)); // Active amber-charcoal pill
 							ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
 						} else {
 							ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent inactive
@@ -1092,7 +1092,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 							CardToggle("Visible", &g_ESP.bVisibleOnly, "e_vis");
 							ImGui::Spacing();
 
-							// Max Dist row with purple tag value
+							// Max Dist row with amber tag value
 							ImGui::AlignTextToFramePadding();
 							ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Dist");
 							char distBuf[32];

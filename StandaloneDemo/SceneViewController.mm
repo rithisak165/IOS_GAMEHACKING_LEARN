@@ -899,7 +899,7 @@ static void EndCard()
         for (int i = 0; i < 4; i++) {
             bool isActive = (g_State.currentTab == i);
             if (isActive) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.157f, 0.125f, 0.212f, 0.95f)); // Dark purple pill
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.125f, 0.125f, 0.168f, 0.95f)); // Dark charcoal pill
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent inactive
@@ -1004,7 +1004,7 @@ static void EndCard()
                 for (int st = 0; st < 4; st++) {
                     bool isSubActive = (s_DemoSubTab == st);
                     if (isSubActive) {
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.16f, 0.36f, 0.95f)); // Active purple pill
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.15f, 0.08f, 0.95f)); // Active amber-charcoal pill
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
                     } else {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent inactive
@@ -1075,7 +1075,7 @@ static void EndCard()
                     ToggleSwitch("Visible", &s_DemoVis);
                     ImGui::Spacing();
 
-                    // Max Dist with purple tag
+                    // Max Dist with amber tag
                     static float s_DemoMaxDist = 250.0f;
                     ImGui::AlignTextToFramePadding();
                     ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "Max Dist");
@@ -1085,7 +1085,7 @@ static void EndCard()
                     float rX = ImGui::GetWindowContentRegionMax().x - dW;
                     if (rX > ImGui::GetCursorPosX()) ImGui::SameLine(rX);
                     else ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0.68f, 0.50f, 0.95f, 1.0f), "%s", dBuf);
+                    ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", dBuf);
 
                     ImGui::SetNextItemWidth(-1.0f);
                     ImGui::SliderFloat("##DemoMaxDistSlider", &s_DemoMaxDist, 20.0f, 500.0f, "");
