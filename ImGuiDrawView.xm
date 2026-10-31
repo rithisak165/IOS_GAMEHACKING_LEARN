@@ -209,27 +209,27 @@ static bool NavButton(const char* label, NavIcon icon, bool isSelected, float wi
 	ImU32 icon_col;
 
 	if (isSelected) {
-		bg_col = IM_COL32(44, 27, 77, 245);       // Deep purple rounded pill background (#2C1B4D)
+		bg_col = IM_COL32(40, 32, 54, 245);       // Deep charcoal pill background (#282036)
 		text_col = IM_COL32(255, 255, 255, 255); // Pure white text
-		icon_col = IM_COL32(168, 85, 247, 255);   // Vibrant Violet icon (#A855F7)
+		icon_col = IM_COL32(255, 138, 0, 255);   // Vibrant OXSAK Orange icon (#FF8A00)
 	} else if (hovered || held) {
-		bg_col = IM_COL32(32, 28, 48, 200);
-		text_col = IM_COL32(235, 230, 245, 255);
-		icon_col = IM_COL32(192, 132, 252, 230);
+		bg_col = IM_COL32(32, 30, 44, 200);
+		text_col = IM_COL32(240, 240, 245, 255);
+		icon_col = IM_COL32(255, 179, 71, 230);  // Amber highlight
 	} else {
 		bg_col = IM_COL32(0, 0, 0, 0);           // Clean transparent inactive
-		text_col = IM_COL32(150, 145, 175, 230); // Soft muted lavender gray
-		icon_col = IM_COL32(140, 130, 170, 220); // Soft muted icon
+		text_col = IM_COL32(145, 145, 165, 240); // Soft muted gray
+		icon_col = IM_COL32(130, 130, 150, 220); // Soft muted icon
 	}
 
 	ImDrawList* drawList = window->DrawList;
 	drawList->AddRectFilled(bb.Min, bb.Max, bg_col, 8.0f);
 
 	if (isSelected) {
-		// Active Left Vertical Stripe Indicator (Matching Reference Screenshots!)
+		// Active Left Vertical Stripe in Vibrant OXSAK Orange!
 		drawList->AddRectFilled(ImVec2(bb.Min.x, bb.Min.y + 4.0f),
 								ImVec2(bb.Min.x + 3.5f, bb.Max.y - 4.0f),
-								IM_COL32(147, 51, 234, 255), 2.0f);
+								IM_COL32(255, 138, 0, 255), 2.0f);
 	}
 
 	// Render vector icon on the left
@@ -304,7 +304,7 @@ static void BeginMasterCard(const char* id, const char* title, NavIcon icon, flo
 	ImVec2 badgeMin(p.x, p.y + 1.0f);
 	ImVec2 badgeMax(p.x + 22.0f, p.y + 23.0f);
 	ImU32 badgeBg = isActive ? IM_COL32(56, 32, 78, 255) : IM_COL32(36, 36, 48, 220);
-	ImU32 iconCol = isActive ? IM_COL32(168, 85, 247, 255) : IM_COL32(140, 140, 160, 220);
+	ImU32 iconCol = isActive ? IM_COL32(255, 138, 0, 255) : IM_COL32(140, 140, 160, 220);
 	drawList->AddRectFilled(badgeMin, badgeMax, badgeBg, 5.0f);
 	if (isActive) {
 		drawList->AddRect(badgeMin, badgeMax, IM_COL32(255, 179, 71, 200), 5.0f, 0, 1.0f);
@@ -329,8 +329,8 @@ static void BeginCard(const char* id, const char* title, NavIcon icon, float wid
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 badgeMin(p.x, p.y + 1.0f);
 	ImVec2 badgeMax(p.x + 22.0f, p.y + 23.0f);
-	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(48, 28, 80, 240), 5.0f);
-	DrawNavIcon(icon, ImVec2(badgeMin.x + 11.0f, badgeMin.y + 11.0f), IM_COL32(168, 85, 247, 255));
+	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(44, 28, 62, 240), 5.0f);
+	DrawNavIcon(icon, ImVec2(badgeMin.x + 11.0f, badgeMin.y + 11.0f), IM_COL32(255, 138, 0, 255));
 
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 30.0f);
 	ImGui::AlignTextToFramePadding();
@@ -364,8 +364,8 @@ static bool MiscToggleCard(const char* id, const char* title, NavIcon icon, floa
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 badgeMin(p.x, p.y + 1.0f);
 	ImVec2 badgeMax(p.x + 22.0f, p.y + 23.0f);
-	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(48, 28, 80, 240), 5.0f);
-	DrawNavIcon(icon, ImVec2(badgeMin.x + 11.0f, badgeMin.y + 11.0f), IM_COL32(168, 85, 247, 255));
+	drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(44, 28, 62, 240), 5.0f);
+	DrawNavIcon(icon, ImVec2(badgeMin.x + 11.0f, badgeMin.y + 11.0f), IM_COL32(255, 138, 0, 255));
 
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 30.0f);
 	ImGui::AlignTextToFramePadding();
@@ -424,13 +424,13 @@ static bool CardToggle(const char* label, bool* v, const char* id_suffix)
 	ImVec2 btnMax(rightX + toggleW, toggleY + toggleH);
 
 	ImDrawList* drawList = window->DrawList;
-	ImU32 bgCol = *v ? IM_COL32(147, 51, 234, 255) : IM_COL32(38, 35, 52, 240);
+	ImU32 bgCol = *v ? IM_COL32(255, 138, 0, 245) : IM_COL32(42, 42, 56, 240);
 	drawList->AddRectFilled(btnMin, btnMax, bgCol, radius);
 
 	if (*v) {
-		drawList->AddRect(btnMin, btnMax, IM_COL32(192, 132, 252, 180), radius, 0, 1.0f);
+		drawList->AddRect(btnMin, btnMax, IM_COL32(255, 179, 71, 180), radius, 0, 1.0f);
 	} else {
-		drawList->AddRect(btnMin, btnMax, IM_COL32(65, 60, 85, 180), radius, 0, 1.0f);
+		drawList->AddRect(btnMin, btnMax, IM_COL32(65, 65, 80, 180), radius, 0, 1.0f);
 	}
 
 	// Sliding Pure White Knob
@@ -606,17 +606,17 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 	(void)io;
 
 	// =========================================================================
-	// AQREH / 0xSAK Deep Obsidian & Violet Cyberpunk Palette (Matching Reference)
+	// OXSAK Cyberpunk Obsidian & Vibrant Orange Theme (Exact Match to Reference)
 	// =========================================================================
 	ImGuiStyle &style = ImGui::GetStyle();
-	style.WindowRounding = 13.0f;
-	style.ChildRounding = 9.0f;
+	style.WindowRounding = 12.0f;
+	style.ChildRounding = 8.0f;
 	style.FrameRounding = 6.0f;
 	style.PopupRounding = 8.0f;
 	style.ScrollbarRounding = 9.0f;
-	style.GrabRounding = 6.0f;
+	style.GrabRounding = 5.0f;
 	style.TabRounding = 6.0f;
-	style.WindowBorderSize = 1.8f;
+	style.WindowBorderSize = 1.2f;
 	style.FrameBorderSize = 0.5f;
 	style.PopupBorderSize = 1.0f;
 	style.ScrollbarSize = 6.0f;
@@ -626,35 +626,35 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 	style.ItemInnerSpacing = ImVec2(6, 5);
 
 	ImVec4 *colors = style.Colors;
-	colors[ImGuiCol_WindowBg]           = ImVec4(0.071f, 0.067f, 0.102f, 0.97f);  // #12111A Deep Obsidian
-	colors[ImGuiCol_ChildBg]            = ImVec4(0.102f, 0.094f, 0.153f, 0.95f);  // #1A1827 Cards
-	colors[ImGuiCol_PopupBg]            = ImVec4(0.078f, 0.074f, 0.110f, 0.98f);  // #14131C Sidebar
-	colors[ImGuiCol_Border]             = ImVec4(0.545f, 0.360f, 0.965f, 0.85f);  // #8B5CF6 Neon Violet Glow
+	colors[ImGuiCol_WindowBg]           = ImVec4(0.063f, 0.063f, 0.078f, 0.96f);  // #101014 Obsidian Charcoal
+	colors[ImGuiCol_ChildBg]            = ImVec4(0.110f, 0.110f, 0.155f, 0.95f);  // #1C1C28 Cards
+	colors[ImGuiCol_PopupBg]            = ImVec4(0.082f, 0.082f, 0.106f, 0.98f);  // #15151B Sidebar
+	colors[ImGuiCol_Border]             = ImVec4(1.0f, 0.54f, 0.0f, 0.45f);       // #FF8A00 Glowing Orange Border
 	colors[ImGuiCol_BorderShadow]       = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-	colors[ImGuiCol_FrameBg]            = ImVec4(0.149f, 0.137f, 0.204f, 0.90f);
-	colors[ImGuiCol_FrameBgHovered]     = ImVec4(0.200f, 0.180f, 0.280f, 1.0f);
-	colors[ImGuiCol_FrameBgActive]      = ImVec4(0.576f, 0.200f, 0.918f, 0.40f);
-	colors[ImGuiCol_TitleBg]            = ImVec4(0.078f, 0.074f, 0.110f, 1.0f);
-	colors[ImGuiCol_TitleBgActive]      = ImVec4(0.078f, 0.074f, 0.110f, 1.0f);
-	colors[ImGuiCol_TitleBgCollapsed]   = ImVec4(0.078f, 0.074f, 0.110f, 1.0f);
-	colors[ImGuiCol_CheckMark]          = ImVec4(0.576f, 0.200f, 0.918f, 1.0f);  // #9333EA Purple
-	colors[ImGuiCol_SliderGrab]         = ImVec4(0.576f, 0.200f, 0.918f, 1.0f);  // #9333EA Purple
-	colors[ImGuiCol_SliderGrabActive]   = ImVec4(0.658f, 0.333f, 0.968f, 1.0f);  // #A855F7 Light Purple
-	colors[ImGuiCol_Button]             = ImVec4(0.160f, 0.145f, 0.225f, 1.0f);
-	colors[ImGuiCol_ButtonHovered]      = ImVec4(0.576f, 0.200f, 0.918f, 0.35f);
-	colors[ImGuiCol_ButtonActive]       = ImVec4(0.576f, 0.200f, 0.918f, 0.65f);
-	colors[ImGuiCol_Header]             = ImVec4(0.576f, 0.200f, 0.918f, 0.25f);
-	colors[ImGuiCol_HeaderHovered]      = ImVec4(0.576f, 0.200f, 0.918f, 0.40f);
-	colors[ImGuiCol_HeaderActive]       = ImVec4(0.576f, 0.200f, 0.918f, 0.70f);
-	colors[ImGuiCol_Tab]                = ImVec4(0.120f, 0.110f, 0.165f, 1.0f);
-	colors[ImGuiCol_TabHovered]         = ImVec4(0.576f, 0.200f, 0.918f, 0.40f);
-	colors[ImGuiCol_TabActive]          = ImVec4(0.576f, 0.200f, 0.918f, 0.85f);
+	colors[ImGuiCol_FrameBg]            = ImVec4(0.14f, 0.14f, 0.18f, 0.90f);
+	colors[ImGuiCol_FrameBgHovered]     = ImVec4(0.20f, 0.20f, 0.26f, 1.0f);
+	colors[ImGuiCol_FrameBgActive]      = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+	colors[ImGuiCol_TitleBg]            = ImVec4(0.082f, 0.082f, 0.106f, 1.0f);
+	colors[ImGuiCol_TitleBgActive]      = ImVec4(0.082f, 0.082f, 0.106f, 1.0f);
+	colors[ImGuiCol_TitleBgCollapsed]   = ImVec4(0.082f, 0.082f, 0.106f, 1.0f);
+	colors[ImGuiCol_CheckMark]          = ImVec4(1.0f, 0.54f, 0.0f, 1.0f);       // #FF8A00 Vibrant Orange
+	colors[ImGuiCol_SliderGrab]         = ImVec4(1.0f, 0.54f, 0.0f, 1.0f);       // #FF8A00 Vibrant Orange
+	colors[ImGuiCol_SliderGrabActive]   = ImVec4(1.0f, 0.70f, 0.28f, 1.0f);      // #FFB347 Amber Highlight
+	colors[ImGuiCol_Button]             = ImVec4(0.16f, 0.16f, 0.22f, 1.0f);
+	colors[ImGuiCol_ButtonHovered]      = ImVec4(1.0f, 0.54f, 0.0f, 0.35f);
+	colors[ImGuiCol_ButtonActive]       = ImVec4(1.0f, 0.54f, 0.0f, 0.65f);
+	colors[ImGuiCol_Header]             = ImVec4(1.0f, 0.54f, 0.0f, 0.25f);
+	colors[ImGuiCol_HeaderHovered]      = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+	colors[ImGuiCol_HeaderActive]       = ImVec4(1.0f, 0.54f, 0.0f, 0.70f);
+	colors[ImGuiCol_Tab]                = ImVec4(0.12f, 0.12f, 0.16f, 1.0f);
+	colors[ImGuiCol_TabHovered]         = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+	colors[ImGuiCol_TabActive]          = ImVec4(1.0f, 0.54f, 0.0f, 0.85f);
 	colors[ImGuiCol_ScrollbarBg]        = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-	colors[ImGuiCol_ScrollbarGrab]      = ImVec4(0.545f, 0.360f, 0.965f, 0.80f);  // Purple scrollbar
-	colors[ImGuiCol_ScrollbarGrabHovered]= ImVec4(0.658f, 0.333f, 0.968f, 0.95f);
-	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.750f, 0.450f, 1.000f, 1.0f);
-	colors[ImGuiCol_Text]               = ImVec4(0.97f, 0.97f, 0.99f, 1.0f);
-	colors[ImGuiCol_TextDisabled]       = ImVec4(0.48f, 0.46f, 0.58f, 1.0f);
+	colors[ImGuiCol_ScrollbarGrab]      = ImVec4(1.0f, 0.54f, 0.0f, 0.75f);       // Orange Scrollbar
+	colors[ImGuiCol_ScrollbarGrabHovered]= ImVec4(1.0f, 0.65f, 0.15f, 0.90f);
+	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(1.0f, 0.75f, 0.25f, 1.0f);
+	colors[ImGuiCol_Text]               = ImVec4(0.96f, 0.96f, 0.98f, 1.0f);     // Clean White
+	colors[ImGuiCol_TextDisabled]       = ImVec4(0.50f, 0.50f, 0.58f, 1.0f);     // Muted Gray
 
 	// Load Roboto Condensed embedded font directly from memory
 	io.Fonts->AddFontFromMemoryTTF(roboto_regular, sizeof(roboto_regular), 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
@@ -698,7 +698,11 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 - (void)loadView
 {
 	CGRect screenBounds = [UIScreen mainScreen].bounds;
-	self.view = [[ImGuiTouchView alloc] initWithFrame:screenBounds];
+	CGFloat w = fmaxf(screenBounds.size.width, screenBounds.size.height);
+	CGFloat h = fminf(screenBounds.size.width, screenBounds.size.height);
+	self.view = [[ImGuiTouchView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
+	self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	self.view.clipsToBounds = NO;
 }
 
 - (void)viewDidLoad
@@ -709,7 +713,21 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 	self.mtkView.delegate = self;
 	self.mtkView.clearColor = MTLClearColorMake(0, 0, 0, 0);
 	self.mtkView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0];
-	self.mtkView.clipsToBounds = YES;
+	self.mtkView.clipsToBounds = NO; // MUST BE NO to prevent clipping the right side of the menu!
+	self.mtkView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+}
+
+- (void)viewDidLayoutSubviews
+{
+	[super viewDidLayoutSubviews];
+	if (self.view.superview) {
+		CGRect supBounds = self.view.superview.bounds;
+		CGFloat targetW = fmaxf(supBounds.size.width, supBounds.size.height);
+		CGFloat targetH = fminf(supBounds.size.width, supBounds.size.height);
+		if (fabsf(self.view.frame.size.width - targetW) > 1.0f || fabsf(self.view.frame.size.height - targetH) > 1.0f) {
+			self.view.frame = CGRectMake(0, 0, targetW, targetH);
+		}
+	}
 }
 
 // Window Draggable Position State
@@ -774,10 +792,28 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 - (void)drawInMTKView:(MTKView *)view
 {
 	if (!self.device || !self.commandQueue) return;
-	ImGuiIO &io = ImGui::GetIO();
-	io.DisplaySize.x = view.bounds.size.width;
-	io.DisplaySize.y = view.bounds.size.height;
+
+	// Ensure view frame always matches the full landscape superview dimensions
+	if (view.superview) {
+		CGRect supBounds = view.superview.bounds;
+		CGFloat targetW = fmaxf(supBounds.size.width, supBounds.size.height);
+		CGFloat targetH = fminf(supBounds.size.width, supBounds.size.height);
+		if (fabsf(view.frame.size.width - targetW) > 1.0f || fabsf(view.frame.size.height - targetH) > 1.0f) {
+			view.frame = CGRectMake(0, 0, targetW, targetH);
+		}
+	}
+
+	float screenW = fmaxf(view.bounds.size.width, view.bounds.size.height);
+	float screenH = fminf(view.bounds.size.width, view.bounds.size.height);
+
 	CGFloat framebufferScale = view.window.screen.nativeScale ?: UIScreen.mainScreen.nativeScale;
+	CGSize targetDrawableSize = CGSizeMake(screenW * framebufferScale, screenH * framebufferScale);
+	if (!CGSizeEqualToSize(view.drawableSize, targetDrawableSize)) {
+		view.drawableSize = targetDrawableSize;
+	}
+
+	ImGuiIO &io = ImGui::GetIO();
+	io.DisplaySize = ImVec2(screenW, screenH);
 	io.DisplayFramebufferScale = ImVec2(framebufferScale, framebufferScale);
 	io.DeltaTime = 1 / float(view.preferredFramesPerSecond ?: 60);
 
@@ -791,11 +827,6 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 
 		ImGui_ImplMetal_NewFrame(renderPassDescriptor);
 		ImGui::NewFrame();
-
-		// Ensure Landscape Screen Dimensions (always wide, never assuming portrait)
-		float screenW = fmaxf(view.bounds.size.width, view.bounds.size.height);
-		float screenH = fminf(view.bounds.size.width, view.bounds.size.height);
-		io.DisplaySize = ImVec2(screenW, screenH);
 
 		// Compact Reference Dimensions (575 x 335 pt) allowing full free dragging across screen
 		float safeMarginX = 14.0f;
@@ -853,12 +884,23 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 			{
 				ImGui::Spacing();
 				
+				// Full Top Sidebar Drag Handle via io.MouseDelta
+				ImGui::SetCursorPos(ImVec2(0, 0));
+				ImGui::InvisibleButton("##SidebarTopDragZone", ImVec2(sidebarW, 60.0f));
+				if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
+					s_IsDraggingHeader = true;
+					s_MenuPos.x += io.MouseDelta.x;
+					s_MenuPos.y += io.MouseDelta.y;
+					s_MenuPos.x = fmaxf(minPosX, fminf(maxPosX, s_MenuPos.x));
+					s_MenuPos.y = fmaxf(minPosY, fminf(maxPosY, s_MenuPos.y));
+				}
+
 				// Render the authentic graphic OXSAK emblem badge at the top
 				if (s_LogoTexture) {
 					float logoSize = 44.0f;
 					float logoX = (sidebarW - logoSize) * 0.5f - 6.0f;
 					if (logoX < 4.0f) logoX = 4.0f;
-					ImGui::SetCursorPosX(logoX);
+					ImGui::SetCursorPos(ImVec2(logoX, 10.0f));
 					ImGui::Image((__bridge void *)s_LogoTexture, ImVec2(logoSize, logoSize));
 				}
 				
@@ -943,7 +985,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 					ImVec2 cp = ImGui::GetCursorScreenPos();
 
 					dList->AddRectFilled(ImVec2(cp.x, cp.y + 1.0f), ImVec2(cp.x + 20.0f, cp.y + 21.0f), IM_COL32(56, 32, 78, 255), 4.0f);
-					DrawNavIcon(NAV_ICON_ESP, ImVec2(cp.x + 10.0f, cp.y + 11.0f), IM_COL32(168, 85, 247, 255));
+					DrawNavIcon(NAV_ICON_ESP, ImVec2(cp.x + 10.0f, cp.y + 11.0f), IM_COL32(255, 138, 0, 255));
 
 					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 26.0f);
 					ImGui::AlignTextToFramePadding();
@@ -1059,7 +1101,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 							float rightDistX = ImGui::GetWindowContentRegionMax().x - distW;
 							if (rightDistX > ImGui::GetCursorPosX()) ImGui::SameLine(rightDistX);
 							else ImGui::SameLine();
-							ImGui::TextColored(ImVec4(0.68f, 0.50f, 0.95f, 1.0f), "%s", distBuf);
+							ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "%s", distBuf);
 
 							ImGui::SetNextItemWidth(-1.0f);
 							ImGui::SliderFloat("##MaxDistSlider", &g_ESP.maxDistance, 20.0f, 500.0f, "");
@@ -1102,7 +1144,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 							float rX = ImGui::GetWindowContentRegionMax().x - dW;
 							if (rX > ImGui::GetCursorPosX()) ImGui::SameLine(rX);
 							else ImGui::SameLine();
-							ImGui::TextColored(ImVec4(0.68f, 0.50f, 0.95f, 1.0f), "%s", dBuf);
+							ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "%s", dBuf);
 
 							ImGui::SetNextItemWidth(-1.0f);
 							ImGui::SliderFloat("##LootDist", &s_LootDist, 10.0f, 300.0f, "");

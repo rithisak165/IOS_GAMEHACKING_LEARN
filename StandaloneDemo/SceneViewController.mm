@@ -962,14 +962,14 @@ static void EndCard()
 
                 ImGui::SetCursorPos(ImVec2(10.0f, 6.0f));
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextColored(ImVec4(0.97f, 0.97f, 0.99f, 1.0f), "[#] 0xSAK");
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#] 0xSAK");
 
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.55f, 0.40f, 0.85f, 0.8f), "|");
+                ImGui::TextColored(ImVec4(0.40f, 0.40f, 0.50f, 0.8f), "|");
 
                 ImGui::SameLine();
                 const char* tabNames[] = { "ESP MODULE", "AIMBOT ASSIST", "MISCELLANEOUS", "SETTINGS" };
-                ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.90f, 0.95f), "%s", tabNames[g_State.currentTab]);
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "%s", tabNames[g_State.currentTab]);
 
                 const char* devLabel = "DEV: @rithysak_meng";
                 float devW = ImGui::CalcTextSize(devLabel).x;

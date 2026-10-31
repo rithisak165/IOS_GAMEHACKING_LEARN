@@ -83,12 +83,15 @@
     } else if (pan.state == UIGestureRecognizerStateChanged) {
         self.center = CGPointMake(_viewStart.x + translation.x, _viewStart.y + translation.y);
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
-        CGRect screenBounds = window.bounds;
+        UIView *sup = self.superview ?: window;
+        CGRect screenBounds = sup.bounds;
+        CGFloat screenW = fmaxf(screenBounds.size.width, screenBounds.size.height);
+        CGFloat screenH = fminf(screenBounds.size.width, screenBounds.size.height);
         CGFloat radius = self.frame.size.width / 2.0f;
         CGFloat minX = 12.0f + radius;
-        CGFloat maxX = screenBounds.size.width - 12.0f - radius;
+        CGFloat maxX = screenW - 12.0f - radius;
         CGFloat minY = 24.0f + radius;
-        CGFloat maxY = screenBounds.size.height - 24.0f - radius;
+        CGFloat maxY = screenH - 24.0f - radius;
         
         CGPoint finalCenter = self.center;
         finalCenter.x = MAX(minX, MIN(maxX, finalCenter.x));
@@ -205,7 +208,8 @@ static const NSInteger kOXSAKLauncherTag = 0x5A5;
 {
     UIWindow *window = [PubgLoad findKeyWindow];
     if (window) {
-        UIView *targetContainer = window; // Attach directly to UIWindow for clean presentation above root view and safe modal dialog flow
+        // Prefer rootViewController.view (Unity rendering view) to ensure landscape coordinate space; fallback to window
+        UIView *targetContainer = (window.rootViewController && window.rootViewController.view) ? window.rootViewController.view : window;
         
         // Remove any stale duplicate overlays if present
         for (UIView *subview in targetContainer.subviews) {
@@ -217,11 +221,22 @@ static const NSInteger kOXSAKLauncherTag = 0x5A5;
             }
         }
 
-        // Attach ImGui overlay view (Singleton)
-        if (_vna && _vna.view.superview != targetContainer) {
-            [_vna.view removeFromSuperview];
-            _vna.view.tag = kOXSAKOverlayTag;
-            [targetContainer addSubview:_vna.view];
+        // Calculate full landscape dimensions across the entire display
+        CGRect bounds = targetContainer.bounds;
+        CGFloat screenW = fmaxf(bounds.size.width, bounds.size.height);
+        CGFloat screenH = fminf(bounds.size.width, bounds.size.height);
+
+        // Attach ImGui overlay view (Singleton) with full screen bounds and NO clipping
+        if (_vna) {
+            _vna.view.frame = CGRectMake(0, 0, screenW, screenH);
+            _vna.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            _vna.view.clipsToBounds = NO;
+
+            if (_vna.view.superview != targetContainer) {
+                [_vna.view removeFromSuperview];
+                _vna.view.tag = kOXSAKOverlayTag;
+                [targetContainer addSubview:_vna.view];
+            }
         }
         
         // Attach Floating OXSAK Button
@@ -239,8 +254,8 @@ static const NSInteger kOXSAKLauncherTag = 0x5A5;
             [targetContainer bringSubviewToFront:_floatingButton];
         }
         
-        // Invalidate timer once attached
-        if (_vna.view.superview && _vna.view.frame.size.width > 0 && _floatingButton.superview) {
+        // Invalidate timer once attached with verified full-screen landscape width
+        if (_vna.view.superview && _vna.view.frame.size.width >= 500.0f && _floatingButton.superview) {
             [self.attachTimer invalidate];
             self.attachTimer = nil;
         }
