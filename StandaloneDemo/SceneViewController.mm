@@ -431,20 +431,20 @@ struct DummyTarget {
     style.WindowBorderSize  = 1.2f;
     style.FrameBorderSize   = 0.0f;
 
-    style.Colors[ImGuiCol_WindowBg]         = ImVec4(0.071f, 0.063f, 0.122f, 0.98f); // #12101F Deep Violet
-    style.Colors[ImGuiCol_Border]           = ImVec4(0.180f, 0.145f, 0.290f, 0.70f); // #2E254A Subtle Border
-    style.Colors[ImGuiCol_FrameBg]          = ImVec4(0.149f, 0.129f, 0.227f, 0.90f); // #26213A
-    style.Colors[ImGuiCol_FrameBgHovered]   = ImVec4(0.200f, 0.170f, 0.300f, 1.00f);
-    style.Colors[ImGuiCol_FrameBgActive]    = ImVec4(0.545f, 0.361f, 0.965f, 0.50f); // #8B5CF6 Neon Violet
-    style.Colors[ImGuiCol_Button]           = ImVec4(0.149f, 0.129f, 0.227f, 0.90f);
-    style.Colors[ImGuiCol_ButtonHovered]    = ImVec4(0.545f, 0.361f, 0.965f, 0.35f);
-    style.Colors[ImGuiCol_ButtonActive]     = ImVec4(0.545f, 0.361f, 0.965f, 0.65f);
-    style.Colors[ImGuiCol_CheckMark]        = ImVec4(0.545f, 0.361f, 0.965f, 1.00f);
-    style.Colors[ImGuiCol_SliderGrab]       = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);        // White Knob
-    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-    style.Colors[ImGuiCol_ScrollbarGrab]    = ImVec4(0.545f, 0.361f, 0.965f, 0.75f);
-    style.Colors[ImGuiCol_Text]             = ImVec4(0.97f, 0.97f, 0.99f, 1.00f);
+    style.Colors[ImGuiCol_WindowBg]         = ImVec4(0.063f, 0.063f, 0.078f, 0.96f); // #101014
+    style.Colors[ImGuiCol_Border]           = ImVec4(1.0f, 0.54f, 0.0f, 0.50f);      // #FF8A00 Border
+    style.Colors[ImGuiCol_FrameBg]          = ImVec4(0.125f, 0.125f, 0.168f, 1.00f); // #20202B
+    style.Colors[ImGuiCol_FrameBgHovered]   = ImVec4(0.18f, 0.18f, 0.24f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive]    = ImVec4(0.22f, 0.22f, 0.30f, 1.00f);
+    style.Colors[ImGuiCol_Button]           = ImVec4(0.125f, 0.125f, 0.168f, 0.90f);
+    style.Colors[ImGuiCol_ButtonHovered]    = ImVec4(1.0f, 0.54f, 0.0f, 0.40f);
+    style.Colors[ImGuiCol_ButtonActive]     = ImVec4(1.0f, 0.54f, 0.0f, 0.85f);
+    style.Colors[ImGuiCol_CheckMark]        = ImVec4(1.0f, 0.54f, 0.0f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab]       = ImVec4(1.0f, 0.54f, 0.0f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1.0f, 0.70f, 0.28f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0.08f, 0.08f, 0.10f, 0.60f);
+    style.Colors[ImGuiCol_ScrollbarGrab]    = ImVec4(1.0f, 0.54f, 0.0f, 0.65f);
+    style.Colors[ImGuiCol_Text]             = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 
     ImGui_ImplMetal_Init(_device);
 }
@@ -589,8 +589,8 @@ static bool ToggleSwitch(const char *label, bool *v)
     ImVec2 btn_min = ImGui::GetItemRectMin();
     ImVec2 btn_max = ImGui::GetItemRectMax();
 
-    // Background pill (#8B5CF6 when ON, #241E38 when OFF)
-    ImU32 bg_col = *v ? ImColor(139, 92, 246, 255) : ImColor(36, 30, 56, 240);
+    // Background pill (#FF8A00 when ON, #32323F when OFF)
+    ImU32 bg_col = *v ? ImColor(255, 138, 0, 255) : ImColor(50, 50, 63, 255);
     window->DrawList->AddRectFilled(btn_min, btn_max, bg_col, radius);
 
     // Sliding White Knob
@@ -616,7 +616,7 @@ static bool TuningSlider(const char *label, float *v, float v_min, float v_max, 
     float val_w = ImGui::CalcTextSize(val_buf).x;
     float avail_w = ImGui::GetContentRegionAvail().x;
     ImGui::SameLine(avail_w - val_w);
-    ImGui::TextColored(ImVec4(0.66f, 0.33f, 0.97f, 1.0f), "%s", val_buf);
+    ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", val_buf);
 
     // Horizontal slider track
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.16f, 1.0f));
@@ -882,7 +882,7 @@ static void EndCard()
         // 1. LEFT VERTICAL SIDEBAR (#15151B)
         // =================================================================================
         float sidebarW = (screenW < 520.0f) ? 120.0f : 140.0f;
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.086f, 0.075f, 0.153f, 1.0f)); // #161327
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.106f, 1.0f)); // #15151B
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 12.0f));
         ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0.0f), true, ImGuiWindowFlags_NoScrollbar);
@@ -899,11 +899,11 @@ static void EndCard()
         for (int i = 0; i < 4; i++) {
             bool isActive = (g_State.currentTab == i);
             if (isActive) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.212f, 0.129f, 0.349f, 0.98f)); // #362159 Dark purple pill
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.157f, 0.125f, 0.212f, 0.95f)); // Dark purple pill
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent inactive
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.47f, 0.58f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.57f, 0.57f, 0.65f, 1.0f));
             }
 
             char tabLabel[64];
