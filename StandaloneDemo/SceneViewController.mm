@@ -1257,6 +1257,7 @@ static void EndCard()
         }
         ImGui::EndGroup(); // Right Pane Group
     }
+    }
     ImGui::End();
 }
 @end

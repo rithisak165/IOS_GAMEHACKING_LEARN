@@ -1181,6 +1181,7 @@ static bool OXSAK_Toggle(const char* label, bool* v)
 				ImGui::EndChild(); // ContentScrollArea
 			}
 			ImGui::EndGroup(); // Right Pane
+		}
 
 			ImGui::End();
 		}
