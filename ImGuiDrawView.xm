@@ -341,6 +341,8 @@ static void BeginCard(const char* id, const char* title, NavIcon icon, float wid
 	ImGui::Spacing();
 }
 
+static bool CardToggle(const char* label, bool* v, const char* id_suffix = nullptr);
+
 static void EndCard()
 {
 	ImGui::EndChild();
