@@ -428,8 +428,8 @@ struct DummyTarget {
     style.WindowRounding    = 12.0f;
     style.FrameRounding     = 8.0f;
     style.PopupRounding     = 8.0f;
-    style.ScrollbarRounding = 10.0f;
-    style.ScrollbarSize     = 7.0f;
+    style.ScrollbarRounding = 6.0f;
+    style.ScrollbarSize     = 12.0f;
     style.GrabRounding      = 8.0f;
     style.ChildRounding     = 10.0f;
     style.WindowBorderSize  = 1.2f;
@@ -617,21 +617,9 @@ static void DrawFOVCirclePreview(float screenW, float screenH, float radius)
 
     ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 
-    // Subtle amber/orange fill
-    drawList->AddCircleFilled(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 14), 64);
-    // Outer glowing orange circumference
-    drawList->AddCircle(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 180), 64, 1.5f);
-    // Center reticle dot
-    drawList->AddCircleFilled(ImVec2(midX, midY), 2.5f, IM_COL32(255, 179, 71, 220));
-
-    // Radius readout tag above the circle
-    char tagBuf[32];
-    snprintf(tagBuf, sizeof(tagBuf), "%.0f px", radius);
-    ImVec2 tagSz = ImGui::CalcTextSize(tagBuf);
-    float tagY = midY - radius - tagSz.y - 4.0f;
-    if (tagY > 10.0f) {
-        drawList->AddText(ImVec2(midX - tagSz.x * 0.5f, tagY), IM_COL32(255, 179, 71, 200), tagBuf);
-    }
+    // Strictly a thin orange circular outline (#FF8A00) centered on screen
+    // Completely transparent interior: no fill, no gradient, no background, no additional colors
+    drawList->AddCircle(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 255), 64, 1.2f);
 }
 
 #pragma mark - Custom UI Widgets (Matching Reference Layout)
@@ -1377,7 +1365,8 @@ static void EndCard()
             {
                 // Safe bounds on right edge of ContentScrollArea without calling GetWindowScrollbarRect (prevents assertion crash)
                 float rightEdge = scrollWin->Pos.x + scrollWin->Size.x;
-                float sbHitWidth = ImGui::GetStyle().ScrollbarSize + 16.0f;
+                scrollWin->Scroll.x = 0.0f; // Prevent horizontal scrolling
+                float sbHitWidth = ImGui::GetStyle().ScrollbarSize + 30.0f; // Ergonomic 42pt touch target
                 ImRect hoverRect(ImVec2(rightEdge - sbHitWidth, scrollWin->Pos.y), ImVec2(rightEdge, scrollWin->Pos.y + scrollWin->Size.y));
 
                 ImGuiIO& io = ImGui::GetIO();

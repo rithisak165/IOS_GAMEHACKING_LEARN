@@ -579,21 +579,9 @@ static void DrawFOVCirclePreview(float screenW, float screenH, float radius)
 
 	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 
-	// Subtle amber/orange fill
-	drawList->AddCircleFilled(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 14), 64);
-	// Outer glowing orange circumference
-	drawList->AddCircle(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 180), 64, 1.5f);
-	// Center reticle dot
-	drawList->AddCircleFilled(ImVec2(midX, midY), 2.5f, IM_COL32(255, 179, 71, 220));
-
-	// Radius readout tag above the circle
-	char tagBuf[32];
-	snprintf(tagBuf, sizeof(tagBuf), "%.0f px", radius);
-	ImVec2 tagSz = ImGui::CalcTextSize(tagBuf);
-	float tagY = midY - radius - tagSz.y - 4.0f;
-	if (tagY > 10.0f) {
-		drawList->AddText(ImVec2(midX - tagSz.x * 0.5f, tagY), IM_COL32(255, 179, 71, 200), tagBuf);
-	}
+	// Strictly a thin orange circular outline (#FF8A00) centered on screen
+	// Completely transparent interior: no fill, no gradient, no background, no additional colors
+	drawList->AddCircle(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 255), 64, 1.2f);
 }
 
 // =========================================================================
@@ -768,13 +756,13 @@ static ImGuiDrawView *s_SharedDrawViewInstance = nil;
 	style.ChildRounding = 8.0f;
 	style.FrameRounding = 6.0f;
 	style.PopupRounding = 8.0f;
-	style.ScrollbarRounding = 10.0f;
+	style.ScrollbarRounding = 6.0f;
 	style.GrabRounding = 5.0f;
 	style.TabRounding = 6.0f;
 	style.WindowBorderSize = 1.2f;
 	style.FrameBorderSize = 0.5f;
 	style.PopupBorderSize = 1.0f;
-	style.ScrollbarSize = 7.0f;
+	style.ScrollbarSize = 12.0f;
 	style.WindowPadding = ImVec2(10, 10);
 	style.FramePadding = ImVec2(8, 5);
 	style.ItemSpacing = ImVec2(8, 6);
@@ -1000,7 +988,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 			ImGui::SetNextWindowSize(ImVec2(125.0f, 28.0f), ImGuiCond_Always);
 			ImGuiWindowFlags wmFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
 			if (ImGui::Begin("##Watermark", nullptr, wmFlags)) {
-				ImGui::TextColored(ImVec4(0.65f, 0.40f, 0.95f, 0.85f), "0xSAK");
+				ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 0.95f), "0xSAK");
 				ImGui::SameLine();
 				ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 0.6f), "Polyfield");
 			}
@@ -1524,17 +1512,20 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 
 				// Unified Scrollbar Hover Detection & Wheel Scrolling Handler (Safe geometric hit test)
 				ImGuiWindow* scrollWin = ImGui::GetCurrentWindow();
+				if (scrollWin) {
+					scrollWin->Scroll.x = 0.0f; // Strictly prevent nested or horizontal scrolling
+				}
 				if (scrollWin && scrollWin->ScrollbarY)
 				{
-					// Safe bounds on right edge of ContentScrollArea without calling GetWindowScrollbarRect (prevents assertion crash)
+					// Enhanced touch hit area (42pt) for comfortable iPhone dragging
 					float rightEdge = scrollWin->Pos.x + scrollWin->Size.x;
-					float sbHitWidth = ImGui::GetStyle().ScrollbarSize + 16.0f;
-					ImRect hoverRect(ImVec2(rightEdge - sbHitWidth, scrollWin->Pos.y), ImVec2(rightEdge, scrollWin->Pos.y + scrollWin->Size.y));
+					float sbHitWidth = ImGui::GetStyle().ScrollbarSize + 30.0f; // Wide, ergonomic touch target
+					ImRect hoverRect(ImVec2(rightEdge - sbHitWidth, scrollWin->Pos.y), ImVec2(rightEdge + 4.0f, scrollWin->Pos.y + scrollWin->Size.y));
 
 					ImGuiIO& io = ImGui::GetIO();
 					s_ScrollbarHovered = hoverRect.Contains(io.MousePos);
 
-					// Only scroll when hovering directly over the scrollbar!
+					// Smooth vertical scrolling only when touching / hovering the scrollbar
 					if (s_ScrollbarHovered && fabsf(io.MouseWheel) > 0.0f) {
 						float max_step = scrollWin->InnerRect.GetHeight() * 0.67f;
 						float scroll_step = ImFloor(ImMin(5.0f * scrollWin->CalcFontSize(), max_step));
