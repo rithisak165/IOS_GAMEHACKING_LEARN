@@ -91,9 +91,25 @@ static bool s_FastReload     = false;
 static bool s_SpeedHack      = false;
 static bool s_CustomFOV      = false;
 
-// ── Legitimate Player Count Test Data ──
-static int s_PlayerCountSimMode = 2; // 0: 0 Players, 1: 1 Target, 2: 3 Targets, 3: 5 Targets
+// ── Legitimate Entity Counter & HUD Settings ──
+static bool s_ShowEntityCounter = true;
+static bool s_ShowFOVCircle = true;
+static float s_FOVCircleRadius = 95.0f; // in screen points / pixels
+static int s_PlayerCountSimMode = 2;   // 0: 0 Targets, 1: 1 Target, 2: 3 Targets, 3: 5 Targets
+
+static int GetActiveBotCount() {
+	if (g_NpcCount > 0) return g_NpcCount;
+	switch (s_PlayerCountSimMode) {
+		case 0: return 0;
+		case 1: return 1;
+		case 2: return 2;
+		case 3: return 3;
+		default: return 2;
+	}
+}
+
 static int GetActivePlayerCount() {
+	if (g_SpawnedNetCount > 0) return g_SpawnedNetCount;
 	switch (s_PlayerCountSimMode) {
 		case 0: return 0;
 		case 1: return 1;
@@ -509,6 +525,75 @@ static bool CardToggle(const char* label, bool* v, const char* id_suffix)
 	drawList->AddCircleFilled(ImVec2(knobX, btnMin.y + radius), radius - 2.2f, IM_COL32(255, 255, 255, 255));
 
 	return *v;
+}
+
+// =========================================================================
+// Floating Entity Counter HUD & FOV Circle Visualization
+// Rendered outside the OXSAK menu on the background draw list
+// =========================================================================
+static void DrawFloatingEntityCounter(float screenW, float screenH, int bots, int players)
+{
+	int total = bots + players;
+	float cardW = 230.0f;
+	float cardH = 32.0f;
+	float posX = (screenW - cardW) * 0.5f;
+	float posY = (screenH * 0.80f) - (cardH * 0.5f); // 20% above the bottom
+
+	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+	ImVec2 minPos(posX, posY);
+	ImVec2 maxPos(posX + cardW, posY + cardH);
+
+	// Obsidian Charcoal Capsule (#101014)
+	drawList->AddRectFilled(minPos, maxPos, IM_COL32(16, 16, 20, 235), 7.0f);
+	// Glowing Orange Border (#FF8A00)
+	drawList->AddRect(minPos, maxPos, IM_COL32(255, 138, 0, 180), 7.0f, 0, 1.2f);
+
+	float colW = cardW / 3.0f;
+
+	// Subtle Dividers
+	drawList->AddLine(ImVec2(posX + colW, posY + 5.0f), ImVec2(posX + colW, posY + cardH - 5.0f), IM_COL32(50, 50, 65, 200), 1.0f);
+	drawList->AddLine(ImVec2(posX + colW * 2.0f, posY + 5.0f), ImVec2(posX + colW * 2.0f, posY + cardH - 5.0f), IM_COL32(50, 50, 65, 200), 1.0f);
+
+	char buf[32];
+
+	// 1. Left: Bots
+	snprintf(buf, sizeof(buf), "BOTS: %d", bots);
+	ImVec2 sz1 = ImGui::CalcTextSize(buf);
+	drawList->AddText(ImVec2(posX + (colW - sz1.x) * 0.5f, posY + (cardH - sz1.y) * 0.5f), IM_COL32(255, 179, 71, 240), buf);
+
+	// 2. Center: Total (Highlighted Cyberpunk Orange)
+	snprintf(buf, sizeof(buf), "TOTAL: %d", total);
+	ImVec2 sz2 = ImGui::CalcTextSize(buf);
+	drawList->AddText(ImVec2(posX + colW + (colW - sz2.x) * 0.5f, posY + (cardH - sz2.y) * 0.5f), IM_COL32(255, 138, 0, 255), buf);
+
+	// 3. Right: Players
+	snprintf(buf, sizeof(buf), "PLAYERS: %d", players);
+	ImVec2 sz3 = ImGui::CalcTextSize(buf);
+	drawList->AddText(ImVec2(posX + colW * 2.0f + (colW - sz3.x) * 0.5f, posY + (cardH - sz3.y) * 0.5f), IM_COL32(245, 245, 250, 240), buf);
+}
+
+static void DrawFOVCirclePreview(float screenW, float screenH, float radius)
+{
+	float midX = screenW * 0.5f;
+	float midY = screenH * 0.5f;
+
+	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+
+	// Subtle amber/orange fill
+	drawList->AddCircleFilled(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 14), 64);
+	// Outer glowing orange circumference
+	drawList->AddCircle(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 180), 64, 1.5f);
+	// Center reticle dot
+	drawList->AddCircleFilled(ImVec2(midX, midY), 2.5f, IM_COL32(255, 179, 71, 220));
+
+	// Radius readout tag above the circle
+	char tagBuf[32];
+	snprintf(tagBuf, sizeof(tagBuf), "%.0f px", radius);
+	ImVec2 tagSz = ImGui::CalcTextSize(tagBuf);
+	float tagY = midY - radius - tagSz.y - 4.0f;
+	if (tagY > 10.0f) {
+		drawList->AddText(ImVec2(midX - tagSz.x * 0.5f, tagY), IM_COL32(255, 179, 71, 200), tagBuf);
+	}
 }
 
 // =========================================================================
@@ -1320,7 +1405,7 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 						ImGui::AlignTextToFramePadding();
 						ImGui::TextColored(ImVec4(0.88f, 0.88f, 0.92f, 1.0f), "FOV Radius");
 						char fovBuf[32];
-						snprintf(fovBuf, sizeof(fovBuf), "%.0f deg", s_SilentFOV);
+						snprintf(fovBuf, sizeof(fovBuf), "%.0f px", s_FOVCircleRadius);
 						float fovW = ImGui::CalcTextSize(fovBuf).x;
 						float rFovX = ImGui::GetWindowContentRegionMax().x - fovW;
 						if (rFovX > ImGui::GetCursorPosX()) ImGui::SameLine(rFovX);
@@ -1328,7 +1413,11 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 						ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", fovBuf);
 
 						ImGui::SetNextItemWidth(-1.0f);
-						ImGui::SliderFloat("##SilentFOV", &s_SilentFOV, 10.0f, 180.0f, "");
+						ImGui::SliderFloat("##FOVCircleRadius", &s_FOVCircleRadius, 20.0f, 250.0f, "");
+						s_SilentFOV = s_FOVCircleRadius;
+
+						ImGui::Spacing();
+						CardToggle("FOV Circle Preview", &s_ShowFOVCircle, "aim_fov_circ");
 
 						ImGui::Spacing();
 
@@ -1471,6 +1560,18 @@ static ImVec2 s_DragStartMenuPos(0, 0);
 			ImU32 col = ImColor(s_CrosshairColor);
 			drawList->AddLine(ImVec2(midX - s_CrosshairSize, midY), ImVec2(midX + s_CrosshairSize, midY), col, 1.5f);
 			drawList->AddLine(ImVec2(midX, midY - s_CrosshairSize), ImVec2(midX, midY + s_CrosshairSize), col, 1.5f);
+		}
+
+		// 1. Draw Centered FOV Circle Visualization if enabled
+		if (s_ShowFOVCircle) {
+			DrawFOVCirclePreview(screenW, screenH, s_FOVCircleRadius);
+		}
+
+		// 2. Draw Floating Entity Counter HUD outside the menu (20% above bottom)
+		if (s_ShowEntityCounter) {
+			int bCount = GetActiveBotCount();
+			int pCount = GetActivePlayerCount();
+			DrawFloatingEntityCounter(screenW, screenH, bCount, pCount);
 		}
 
 		// Draw ESP Line and Box overlay if enabled

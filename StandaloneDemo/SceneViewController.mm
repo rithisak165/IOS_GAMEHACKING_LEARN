@@ -28,6 +28,9 @@ struct OXSAKState {
     bool  bLockLine           = true;
     float fovRadius           = 70.0f;
     float smoothness          = 10.0f;
+    bool  bShowEntityCounter  = true;
+    bool  bShowFOVCircle      = true;
+    float fovCircleRadius     = 95.0f;
     float maxTurn             = 0.0f;
     float reactionMs          = 0.0f;
     float jitter              = 0.07f;
@@ -561,6 +564,74 @@ struct DummyTarget {
         *outDist = sqrtf(dx * dx + dy * dy + dz * dz);
     }
     return YES;
+}
+
+// =========================================================================
+// Floating Entity Counter HUD & FOV Circle Visualization
+// =========================================================================
+static void DrawFloatingEntityCounter(float screenW, float screenH, int bots, int players)
+{
+    int total = bots + players;
+    float cardW = 230.0f;
+    float cardH = 32.0f;
+    float posX = (screenW - cardW) * 0.5f;
+    float posY = (screenH * 0.80f) - (cardH * 0.5f); // 20% above bottom
+
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+    ImVec2 minPos(posX, posY);
+    ImVec2 maxPos(posX + cardW, posY + cardH);
+
+    // Obsidian Charcoal Capsule (#101014)
+    drawList->AddRectFilled(minPos, maxPos, IM_COL32(16, 16, 20, 235), 7.0f);
+    // Glowing Orange Border (#FF8A00)
+    drawList->AddRect(minPos, maxPos, IM_COL32(255, 138, 0, 180), 7.0f, 0, 1.2f);
+
+    float colW = cardW / 3.0f;
+
+    // Subtle Dividers
+    drawList->AddLine(ImVec2(posX + colW, posY + 5.0f), ImVec2(posX + colW, posY + cardH - 5.0f), IM_COL32(50, 50, 65, 200), 1.0f);
+    drawList->AddLine(ImVec2(posX + colW * 2.0f, posY + 5.0f), ImVec2(posX + colW * 2.0f, posY + cardH - 5.0f), IM_COL32(50, 50, 65, 200), 1.0f);
+
+    char buf[32];
+
+    // 1. Left: Bots
+    snprintf(buf, sizeof(buf), "BOTS: %d", bots);
+    ImVec2 sz1 = ImGui::CalcTextSize(buf);
+    drawList->AddText(ImVec2(posX + (colW - sz1.x) * 0.5f, posY + (cardH - sz1.y) * 0.5f), IM_COL32(255, 179, 71, 240), buf);
+
+    // 2. Center: Total (Highlighted Cyberpunk Orange)
+    snprintf(buf, sizeof(buf), "TOTAL: %d", total);
+    ImVec2 sz2 = ImGui::CalcTextSize(buf);
+    drawList->AddText(ImVec2(posX + colW + (colW - sz2.x) * 0.5f, posY + (cardH - sz2.y) * 0.5f), IM_COL32(255, 138, 0, 255), buf);
+
+    // 3. Right: Players
+    snprintf(buf, sizeof(buf), "PLAYERS: %d", players);
+    ImVec2 sz3 = ImGui::CalcTextSize(buf);
+    drawList->AddText(ImVec2(posX + colW * 2.0f + (colW - sz3.x) * 0.5f, posY + (cardH - sz3.y) * 0.5f), IM_COL32(245, 245, 250, 240), buf);
+}
+
+static void DrawFOVCirclePreview(float screenW, float screenH, float radius)
+{
+    float midX = screenW * 0.5f;
+    float midY = screenH * 0.5f;
+
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+
+    // Subtle amber/orange fill
+    drawList->AddCircleFilled(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 14), 64);
+    // Outer glowing orange circumference
+    drawList->AddCircle(ImVec2(midX, midY), radius, IM_COL32(255, 138, 0, 180), 64, 1.5f);
+    // Center reticle dot
+    drawList->AddCircleFilled(ImVec2(midX, midY), 2.5f, IM_COL32(255, 179, 71, 220));
+
+    // Radius readout tag above the circle
+    char tagBuf[32];
+    snprintf(tagBuf, sizeof(tagBuf), "%.0f px", radius);
+    ImVec2 tagSz = ImGui::CalcTextSize(tagBuf);
+    float tagY = midY - radius - tagSz.y - 4.0f;
+    if (tagY > 10.0f) {
+        drawList->AddText(ImVec2(midX - tagSz.x * 0.5f, tagY), IM_COL32(255, 179, 71, 200), tagBuf);
+    }
 }
 
 #pragma mark - Custom UI Widgets (Matching Reference Layout)
@@ -1325,5 +1396,18 @@ static void EndCard()
     }
     }
     ImGui::End();
+
+    float screenW = ImGui::GetIO().DisplaySize.x;
+    float screenH = ImGui::GetIO().DisplaySize.y;
+
+    // 1. Draw Centered FOV Circle Visualization if enabled
+    if (g_State.bShowFOVCircle) {
+        DrawFOVCirclePreview(screenW, screenH, g_State.fovCircleRadius);
+    }
+
+    // 2. Draw Floating Entity Counter HUD outside the menu (20% above bottom)
+    if (g_State.bShowEntityCounter) {
+        DrawFloatingEntityCounter(screenW, screenH, 2, 3);
+    }
 }
 @end
