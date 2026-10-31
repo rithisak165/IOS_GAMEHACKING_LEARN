@@ -384,7 +384,7 @@ static bool MiscToggleCard(const char* id, const char* title, NavIcon icon, floa
 }
 
 // Right-Aligned Pill Toggle Switch (Matching Reference Screenshot)
-static bool CardToggle(const char* label, bool* v, const char* id_suffix = nullptr)
+static bool CardToggle(const char* label, bool* v, const char* id_suffix)
 {
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
 	if (window->SkipItems)
