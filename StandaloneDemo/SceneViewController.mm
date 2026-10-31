@@ -874,9 +874,10 @@ static void EndCard()
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 12.0f));
         ImGui::BeginChild("Sidebar", ImVec2(sidebarW, 0.0f), true, ImGuiWindowFlags_NoScrollbar);
 
-        // Sidebar Logo Header
+        // Sidebar Logo Header & Permanent Branding
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "  0xSAK");
+        ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 0.90f), "  @rithysak_meng");
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -926,26 +927,63 @@ static void EndCard()
         ImGui::PopStyleColor();
 
         // =================================================================================
-        // 2. MAIN CONTENT AREA (Single scrollable child with ONE unified scrollbar)
+        // 2. MAIN CONTENT PANE (Pinned Header + Single Scrollable Region)
         // =================================================================================
         ImGui::SameLine();
-        ImGui::BeginChild("ContentArea", ImVec2(0, 0), false);
+        ImGui::BeginGroup();
         {
-            float contentW = ImGui::GetContentRegionAvail().x;
-            float colGap = 10.0f;
-            float colW = (contentW - colGap) * 0.5f;
+            // ── Permanent Header Bar (Visible on ESP, AIM, MISC, SETTING - Never Hidden by Scrolling) ──
+            float headerH = 32.0f;
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.095f, 0.095f, 0.125f, 0.95f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.20f, 0.28f, 0.65f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 5.0f));
+            ImGui::BeginChild("OXSAK_Demo_Header", ImVec2(0, headerH), true, ImGuiWindowFlags_NoScrollbar);
+            {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#] 0xSAK");
+
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.40f, 0.40f, 0.50f, 0.8f), "|");
+
+                ImGui::SameLine();
+                const char* tabNames[] = { "ESP MODULE", "AIM ASSIST", "MISCELLANEOUS", "SETTINGS" };
+                ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.90f, 0.95f), "%s", tabNames[g_State.currentTab]);
+
+                const char* devLabel = "DEV: @rithysak_meng";
+                float devW = ImGui::CalcTextSize(devLabel).x;
+                float rightX = ImGui::GetWindowContentRegionMax().x - devW;
+                if (rightX > ImGui::GetCursorPosX()) {
+                    ImGui::SameLine(rightX);
+                } else {
+                    ImGui::SameLine();
+                }
+                ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "%s", devLabel);
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(2);
+
+            ImGui::Spacing();
+
+            // ── Single Scrollable Region With Unified Vertical Scrollbar ──
+            ImGui::BeginChild("ContentScrollArea", ImVec2(0, 0), false, ImGuiWindowFlags_None);
+            {
+                float contentW = ImGui::GetContentRegionAvail().x;
+                float colGap = 10.0f;
+                float colW = (contentW - colGap) * 0.5f;
 
             // ---------------------------------------------------------------------------------
-            // TAB 0: ESP (Master Enable Switch + 5 Individual Feature Cards)
+            // TAB 0: ESP (Compact Master Enable + Box Underneath + 2-Column Grid)
             // ---------------------------------------------------------------------------------
             if (g_State.currentTab == 0) {
-                // Prominent Full-Width Master Switch Card at the Very Top
+                // 1. Compact Enable ESP Master Card at the Very Top
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, g_State.bEnableESP ? ImVec4(0.125f, 0.115f, 0.180f, 0.98f) : ImVec4(0.095f, 0.095f, 0.130f, 0.92f));
                 ImGui::PushStyleColor(ImGuiCol_Border, g_State.bEnableESP ? ImVec4(1.0f, 0.54f, 0.0f, 0.75f) : ImVec4(0.20f, 0.20f, 0.28f, 0.60f));
-                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 9.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 5.0f));
 
-                ImGui::BeginChild("Demo_Master_Card", ImVec2(contentW, 58.0f), true, ImGuiWindowFlags_NoScrollbar);
+                ImGui::BeginChild("Demo_Master_Card", ImVec2(contentW, 46.0f), true, ImGuiWindowFlags_NoScrollbar);
                 ToggleSwitch("Enable ESP", &g_State.bEnableESP);
                 if (g_State.bEnableESP) {
                     ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.28f, 1.0f), "Master ESP: ACTIVE (All visual layers enabled)");
@@ -970,8 +1008,9 @@ static void EndCard()
                     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
                     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
                     
-                    // Row 1: Left = Box (200pt), Right = Line (94pt) + Health Bar (94pt)
-                    ImGui::BeginChild("Demo_Box_Card", ImVec2(colW, 200.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    // 2. Box Card (Immediately underneath Enable ESP)
+                    float boxH = g_State.bBox ? 134.0f : 78.0f;
+                    ImGui::BeginChild("Demo_Box_Card", ImVec2(contentW, boxH), true, ImGuiWindowFlags_NoScrollbar);
                     ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[#]  Box");
                     ImGui::Separator();
                     ImGui::Spacing();
@@ -983,42 +1022,45 @@ static void EndCard()
                         ImGui::SetNextItemWidth(-1.0f);
                         ImGui::Combo("##DemoBoxStyle", &boxStyle, styles, 2);
                         ImGui::Spacing();
+                        float sliderW = (ImGui::GetContentRegionAvail().x - colGap) * 0.5f;
+                        ImGui::BeginGroup();
                         TuningSlider("Head Offset", &g_State.headOffset, 0.8f, 2.5f, "%.2fm");
-                        ImGui::Spacing();
+                        ImGui::EndGroup();
+                        ImGui::SameLine(0, colGap);
+                        ImGui::BeginGroup();
                         TuningSlider("Box Width", &g_State.boxWidthScale, 0.2f, 0.8f, "%.2f");
+                        ImGui::EndGroup();
                     }
+                    ImGui::EndChild();
+
+                    ImGui::Spacing();
+
+                    // 3. Balanced 2-Column Grid for Remaining 4 Feature Cards (Line, Health, Skeleton, Distance)
+                    // Row 1: Left = Line (90pt), Right = Health Bar (90pt)
+                    ImGui::BeginChild("Demo_Line_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Line");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ToggleSwitch("Enable", &g_State.bSnaplines);
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Target tracer from screen origin");
                     ImGui::EndChild();
 
                     ImGui::SameLine(0, colGap);
 
-                    ImGui::BeginGroup();
-                    {
-                        ImGui::BeginChild("Demo_Line_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
-                        ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Line");
-                        ImGui::Separator();
-                        ImGui::Spacing();
-                        ToggleSwitch("Enable", &g_State.bSnaplines);
-                        ImGui::Spacing();
-                        ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Target tracer from screen origin");
-                        ImGui::EndChild();
-
-                        ImGui::Spacing();
-
-                        ImGui::BeginChild("Demo_Health_Card", ImVec2(colW, 94.0f), true, ImGuiWindowFlags_NoScrollbar);
-                        ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Health Bar");
-                        ImGui::Separator();
-                        ImGui::Spacing();
-                        ToggleSwitch("Enable", &g_State.bHealth);
-                        ImGui::Spacing();
-                        ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic vertical health indicator");
-                        ImGui::EndChild();
-                    }
-                    ImGui::EndGroup();
+                    ImGui::BeginChild("Demo_Health_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "[=]  Health Bar");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ToggleSwitch("Enable", &g_State.bHealth);
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.78f, 0.85f), "Dynamic vertical health indicator");
+                    ImGui::EndChild();
 
                     ImGui::Spacing();
 
-                    // Row 2: Left = Skeleton (96pt), Right = Distance (96pt)
-                    ImGui::BeginChild("Demo_Skel_Card", ImVec2(colW, 96.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    // Row 2: Left = Skeleton (90pt), Right = Distance (90pt)
+                    ImGui::BeginChild("Demo_Skel_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
                     ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "(+)  Skeleton");
                     ImGui::Separator();
                     ImGui::Spacing();
@@ -1029,7 +1071,7 @@ static void EndCard()
 
                     ImGui::SameLine(0, colGap);
 
-                    ImGui::BeginChild("Demo_Dist_Card", ImVec2(colW, 96.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::BeginChild("Demo_Dist_Card", ImVec2(colW, 90.0f), true, ImGuiWindowFlags_NoScrollbar);
                     ImGui::TextColored(ImVec4(1.0f, 0.54f, 0.0f, 1.0f), "{*}  Distance");
                     ImGui::Separator();
                     ImGui::Spacing();
@@ -1211,8 +1253,9 @@ static void EndCard()
                 ImGui::PopStyleVar(2);
                 ImGui::PopStyleColor();
             }
+            ImGui::EndChild(); // ContentScrollArea
         }
-        ImGui::EndChild();
+        ImGui::EndGroup(); // Right Pane Group
     }
     ImGui::End();
 }
